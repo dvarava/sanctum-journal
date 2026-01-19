@@ -31,14 +31,14 @@ export function AIPanel({ analysis, loading, status }: AIPanelProps) {
 
                 {analysis && !loading && (
                     <div className="flex flex-col gap-4">
-                        <div className="p-5 rounded-2xl bg-gradient-to-br from-white/10 to-transparent border border-white/10 shadow-xl backdrop-blur-md">
-                            <div className="flex items-center gap-3 mb-3">
-                                <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent">
+                        <div className="p-6 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border-t border-l border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] backdrop-blur-md">
+                            <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-3">
+                                <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent shadow-[0_0_15px_rgba(45,212,191,0.3)]">
                                     <Sparkles size={16} />
                                 </div>
-                                <h3 className="font-semibold text-white">Insight</h3>
+                                <h3 className="font-semibold text-white tracking-wide">Insight</h3>
                             </div>
-                            <p className="text-sm leading-relaxed text-gray-200">
+                            <p className="text-sm leading-7 text-gray-200 font-light tracking-wide">
                                 {analysis}
                             </p>
                         </div>
