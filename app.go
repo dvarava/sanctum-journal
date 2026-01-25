@@ -21,7 +21,7 @@ import (
 type App struct {
 	ctx      context.Context
 	db       *sql.DB
-	secretKey []byte // for prototype, will derive this from a user password using Argon2 in future
+	secretKey []byte // just for prototype, will derive this from a user password using Argon2 in future
 }
 
 func NewApp() *App {
@@ -128,29 +128,62 @@ func (a *App) GetEntries() []string {
 	return entries
 }
 
-func (a *App) AnalyzeJournal(entryText string) string {
+type AnalysisResult struct {
+	Emotions []string `json:"emotions"`
+	Coaching string   `json:"coaching"`
+}
+
+// function to send text to local Ollama instance and return structured data
+func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	url := "http://localhost:11434/api/generate"
 	
 	// system prompt
-	prompt := fmt.Sprintf("You are an empathetic mental health coach. Analyze this journal entry: '%s'. Provide a brief emotional summary and one small, actionable step. Keep it under 50 words.", entryText)
+	prompt := fmt.Sprintf(`You are an empathetic mental health coach. Analyze this journal entry: '%s'. 
+	Return a valid JSON object with two keys:
+	1. "emotions": a list of 1-3 detected emotions (e.g., ["Anxious", "Hopeful"]).
+	2. "coaching": a brief, supportive coaching tip (under 50 words).
+	Do not include markdown formatting like asterisk or backticks. JSON only.`, entryText)
 
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"model":  "gemma:2b",
 		"prompt": prompt,
 		"stream": false,
+		"format": "json",
 	})
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
-		return "Error connecting to Ollama. Is it running?"
+		return AnalysisResult{Coaching: "Error connecting to Local AI. Is Ollama running?"}
 	}
 	defer resp.Body.Close()
 
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
 
-	if response, ok := result["response"].(string); ok {
-		return response
+	responseStr, ok := result["response"].(string)
+	if !ok {
+		return AnalysisResult{Coaching: "Invalid response from AI."}
 	}
-	return "No response from AI."
+
+	// parse JSON from LLM
+	var analysis AnalysisResult
+	err = json.Unmarshal([]byte(responseStr), &analysis)
+	if err != nil {
+		// fallback if model didn't output perfect JSON
+		return AnalysisResult{
+			Emotions: []string{"Uncertain"}, 
+			Coaching: responseStr,
+		}
+	}
+	
+	return analysis
+}
+
+// mock implementation of OpenAI API
+func (a *App) AnalyzeJournalCloud(entryText string, apiKey string) AnalysisResult {
+
+	return AnalysisResult{
+		Emotions: []string{"Cloud-Analyzed", "Insightful"},
+		Coaching: "This is a cloud-powered insight (Simulated). Your thought patterns suggest a need for rest. Try the '5-4-3-2-1' grounding technique.",
+	}
 }

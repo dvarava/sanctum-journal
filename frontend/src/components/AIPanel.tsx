@@ -1,7 +1,12 @@
-import { Brain, Sparkles, AlertCircle } from 'lucide-react';
+import { Brain, Sparkles, AlertCircle, Heart, MessageCircle } from 'lucide-react';
+
+interface AnalysisResult {
+    emotions: string[];
+    coaching: string;
+}
 
 interface AIPanelProps {
-    analysis: string;
+    analysis: AnalysisResult | null;
     loading: boolean;
     status: string;
 }
@@ -31,27 +36,38 @@ export function AIPanel({ analysis, loading, status }: AIPanelProps) {
 
                 {analysis && !loading && (
                     <div className="flex flex-col gap-4">
-                        <div className="p-6 rounded-2xl bg-gradient-to-b from-white/10 to-white/5 border-t border-l border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] backdrop-blur-md">
+                        {/* Emotions Card */}
+                        <div className="p-6 rounded-2xl bg-gradient-to-b from-blue-500/10 to-blue-600/5 border-t border-l border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] backdrop-blur-md">
                             <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-3">
-                                <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent shadow-[0_0_15px_rgba(45,212,191,0.3)]">
-                                    <Sparkles size={16} />
+                                <div className="w-8 h-8 rounded-full bg-blue-400/20 flex items-center justify-center text-blue-300 shadow-[0_0_15px_rgba(96,165,250,0.3)]">
+                                    <Heart size={16} />
                                 </div>
-                                <h3 className="font-semibold text-white tracking-wide">Insight</h3>
+                                <h3 className="font-semibold text-white tracking-wide">Analysis</h3>
                             </div>
-                            <p className="text-sm leading-7 text-gray-200 font-light tracking-wide">
-                                {analysis}
-                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {analysis.emotions && analysis.emotions.length > 0 ? (
+                                    analysis.emotions.map((emotion, i) => (
+                                        <span key={i} className="px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/20 text-blue-200 text-sm">
+                                            {emotion}
+                                        </span>
+                                    ))
+                                ) : (
+                                    <span className="text-gray-400 text-sm">No specific emotions detected.</span>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Placeholder for future detailed stats */}
-                        <div className="p-4 rounded-xl bg-white/5 border border-white/5">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs text-gray-400">Emotional Clarity</span>
-                                <span className="text-xs text-accent">High</span>
+                        {/* Coaching Card */}
+                        <div className="p-6 rounded-2xl bg-gradient-to-b from-emerald-500/10 to-emerald-600/5 border-t border-l border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] backdrop-blur-md">
+                            <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-3">
+                                <div className="w-8 h-8 rounded-full bg-emerald-400/20 flex items-center justify-center text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)]">
+                                    <MessageCircle size={16} />
+                                </div>
+                                <h3 className="font-semibold text-white tracking-wide">Coaching</h3>
                             </div>
-                            <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-accent w-[75%]" />
-                            </div>
+                            <p className="text-sm leading-7 text-gray-200 font-light tracking-wide italic">
+                                "{analysis.coaching}"
+                            </p>
                         </div>
                     </div>
                 )}

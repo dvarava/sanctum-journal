@@ -1,4 +1,4 @@
-import { Save, Lock } from 'lucide-react';
+import { Save, Lock, Cloud, Cpu } from 'lucide-react';
 
 interface EditorProps {
     value: string;
@@ -6,9 +6,11 @@ interface EditorProps {
     onSave: () => void;
     isSaving: boolean;
     onAnalyze: () => void;
+    useCloud: boolean;
+    setUseCloud: (val: boolean) => void;
 }
 
-export function Editor({ value, onChange, onSave, isSaving, onAnalyze }: EditorProps) {
+export function Editor({ value, onChange, onSave, isSaving, onAnalyze, useCloud, setUseCloud }: EditorProps) {
     const dateStr = new Date().toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'long',
@@ -36,7 +38,26 @@ export function Editor({ value, onChange, onSave, isSaving, onAnalyze }: EditorP
                 />
 
                 {/* Floating Actions */}
-                <div className="absolute bottom-4 right-4 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div className="absolute bottom-4 right-4 flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+
+                    {/* Model Toggle */}
+                    <div className="flex bg-surface/50 rounded-full border border-white/5 p-1 backdrop-blur-sm">
+                        <button
+                            onClick={() => setUseCloud(false)}
+                            className={`p-2 rounded-full transition-all ${!useCloud ? 'bg-accent/20 text-accent shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                            title="Local AI (Privacy Focused)"
+                        >
+                            <Cpu size={14} />
+                        </button>
+                        <button
+                            onClick={() => setUseCloud(true)}
+                            className={`p-2 rounded-full transition-all ${useCloud ? 'bg-blue-500/20 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                            title="Cloud AI (Enhanced Capability)"
+                        >
+                            <Cloud size={14} />
+                        </button>
+                    </div>
+
                     <button
                         onClick={onSave}
                         disabled={!value || isSaving}

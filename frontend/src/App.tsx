@@ -1,9 +1,14 @@
 import { useState, useEffect } from "react";
-import { SaveEntry, AnalyzeJournal, GetEntries } from "../wailsjs/go/main/App";
+import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries } from "../wailsjs/go/main/App";
 import { Layout } from "./components/Layout";
 import { Editor } from "./components/Editor";
 import { AIPanel } from "./components/AIPanel";
 import { HistoryList } from "./components/HistoryList";
+
+interface AnalysisResult {
+  emotions: string[];
+  coaching: string;
+}
 
 function App() {
   const [activeView, setActiveView] = useState("write");
@@ -11,9 +16,10 @@ function App() {
   // editor state
   const [journalText, setJournalText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [useCloud, setUseCloud] = useState(false); // Default to Local (Privacy)
 
   // AI state
-  const [aiResponse, setAiResponse] = useState("");
+  const [aiResponse, setAiResponse] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiStatus, setAiStatus] = useState("");
 
@@ -47,13 +53,28 @@ function App() {
   const handleAnalyze = async () => {
     if (!journalText) return;
     setIsAnalyzing(true);
-    setAiStatus("Connecting to local neural engine...");
+
+    if (useCloud) {
+      setAiStatus("Connecting to Neural Cloud (Secure)...");
+    } else {
+      setAiStatus("Connecting to local neural engine...");
+    }
 
     try {
-      const result = await AnalyzeJournal(journalText);
-      setAiResponse(result);
+      let result;
+      if (useCloud) {
+        // in production, app will prompt for an API key
+        result = await AnalyzeJournalCloud(journalText, "mock-api-key");
+      } else {
+        result = await AnalyzeJournal(journalText);
+      }
+
+      setAiResponse(result as AnalysisResult);
     } catch (e) {
-      setAiResponse("Error analyzing entry.");
+      setAiResponse({
+        emotions: ["Error"],
+        coaching: "Could not analyze entry. Please ensure Ollama is running or check your internet connection."
+      });
     } finally {
       setIsAnalyzing(false);
       setAiStatus("");
@@ -71,6 +92,8 @@ function App() {
             onSave={handleSave}
             isSaving={isSaving}
             onAnalyze={handleAnalyze}
+            useCloud={useCloud}
+            setUseCloud={setUseCloud}
           />
         );
       case "history":
@@ -106,3 +129,4 @@ function App() {
 }
 
 export default App;
+
