@@ -9,9 +9,10 @@ interface AIPanelProps {
     analysis: AnalysisResult | null;
     loading: boolean;
     status: string;
+    useCloud: boolean;
 }
 
-export function AIPanel({ analysis, loading, status }: AIPanelProps) {
+export function AIPanel({ analysis, loading, status, useCloud }: AIPanelProps) {
     return (
         <div className="h-full flex flex-col gap-6 animate-in fade-in slide-in-from-right-4 duration-700">
             <div className="flex items-center gap-2 text-accent">
@@ -73,9 +74,13 @@ export function AIPanel({ analysis, loading, status }: AIPanelProps) {
                 )}
             </div>
 
-            <div className="mt-auto p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200 flex gap-3">
+            <div className={`mt-auto p-4 rounded-xl border text-xs flex gap-3 transition-colors duration-500 ${useCloud ? 'bg-amber-500/10 border-amber-500/20 text-amber-200' : 'bg-blue-500/10 border-blue-500/20 text-blue-200'}`}>
                 <AlertCircle size={16} className="shrink-0" />
-                <p>Your entries are encrypted and analyzed locally. No data leaves this device.</p>
+                <p>
+                    {useCloud
+                        ? "Cloud Mode Active. Analysis data is processed via OpenAI API."
+                        : "Your entries are encrypted and analyzed locally. No data leaves this device."}
+                </p>
             </div>
         </div>
     );

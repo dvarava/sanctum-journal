@@ -130,11 +130,14 @@ function App() {
       activeView={activeView}
       onNavigate={setActiveView}
       rightPanel={
-        <AIPanel
-          analysis={aiResponse}
-          loading={isAnalyzing}
-          status={aiStatus}
-        />
+        activeView === "write" ? (
+          <AIPanel
+            analysis={aiResponse}
+            loading={isAnalyzing}
+            status={aiStatus}
+            useCloud={useCloud}
+          />
+        ) : undefined
       }
     >
       {renderContent()}
