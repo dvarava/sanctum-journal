@@ -1,7 +1,8 @@
 import { FileText, Calendar } from 'lucide-react';
+import { main } from "../../wailsjs/go/models";
 
 interface HistoryListProps {
-    entries: string[];
+    entries: main.Entry[];
 }
 
 export function HistoryList({ entries }: HistoryListProps) {
@@ -18,28 +19,31 @@ export function HistoryList({ entries }: HistoryListProps) {
 
                 {entries.map((entry, idx) => (
                     <div
-                        key={idx}
+                        key={entry.id}
                         className="group relative p-6 bg-surface/40 hover:bg-surface/60 border border-white/5 hover:border-white/10 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden"
                     >
                         <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
                         <div className="relative z-10">
                             <div className="flex items-center justify-between mb-3">
-                                <div className="flex items-center gap-2 text-accent/80">
-                                    <Calendar size={14} />
-                                    <span className="text-xs font-mono opacity-70">Entry #{entries.length - idx}</span>
+                                <span className="font-semibold text-white/90 truncate pr-2" title={entry.title}>
+                                    {entry.title || "Untitled Entry"}
+                                </span>
+                                <div className="flex items-center gap-2 text-accent/80 shrink-0">
+                                    <Calendar size={12} />
+                                    <span className="text-xs font-mono opacity-70">
+                                        {new Date(entry.created_at).toLocaleDateString()}
+                                    </span>
                                 </div>
-                                {/* Placeholder for sentiment icon later */}
-                                <div className="w-2 h-2 rounded-full bg-accent/50" />
                             </div>
 
-                            <p className="text-gray-300 text-sm line-clamp-3 leading-relaxed">
-                                {entry}
+                            <p className="text-gray-400 text-sm line-clamp-3 leading-relaxed font-light">
+                                {entry.preview}
                             </p>
 
                             <div className="mt-4 flex items-center gap-2 text-xs text-gray-500 group-hover:text-accent transition-colors">
                                 <FileText size={12} />
-                                <span>Read full entry</span>
+                                <span className="uppercase tracking-wider">Read Full Entry</span>
                             </div>
                         </div>
                     </div>

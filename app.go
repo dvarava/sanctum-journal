@@ -38,6 +38,14 @@ func (a *App) startup(ctx context.Context) {
 	a.initDB()
 }
 
+type Entry struct {
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	Content   string `json:"content"`
+	Preview   string `json:"preview"`
+	CreatedAt string `json:"created_at"`
+}
+
 // initialize the local SQLite database
 func (a *App) initDB() {
 	appDataDir, _ := os.UserConfigDir()
@@ -59,11 +67,20 @@ func (a *App) initDB() {
 	}
 
 	// create table if not exists
-	sqlStmt := `CREATE TABLE IF NOT EXISTS entries (id INTEGER PRIMARY KEY, content BLOB, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);`
+	sqlStmt := `CREATE TABLE IF NOT EXISTS entries (
+		id INTEGER PRIMARY KEY, 
+		title TEXT DEFAULT '',
+		content BLOB, 
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
 	_, err = a.db.Exec(sqlStmt)
 	if err != nil {
 		fmt.Println("Error creating table:", err)
 	}
+
+	// for existing DBs
+	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN title TEXT DEFAULT '';")
+	
 	fmt.Println("Database initialized at:", dbPath)
 }
 
@@ -106,32 +123,58 @@ func (a *App) decrypt(ciphertext []byte) (string, error) {
 }
 
 // exposed methods for frontend
-func (a *App) SaveEntry(text string) string {
+func (a *App) SaveEntry(title string, text string) string {
 	encryptedData, err := a.encrypt(text)
 	if err != nil {
 		return "Error encrypting data: " + err.Error()
 	}
 
-	_, err = a.db.Exec("INSERT INTO entries (content) VALUES (?)", encryptedData)
+	if title == "" {
+		title = "Untitled Entry"
+	}
+
+	_, err = a.db.Exec("INSERT INTO entries (title, content) VALUES (?, ?)", title, encryptedData)
 	if err != nil {
 		return "Error saving to DB: " + err.Error()
 	}
 	return "Entry saved securely."
 }
 
-func (a *App) GetEntries() []string {
-	rows, err := a.db.Query("SELECT content FROM entries ORDER BY id DESC")
+func (a *App) GetEntries() []Entry {
+	rows, err := a.db.Query("SELECT id, title, content, created_at FROM entries ORDER BY id DESC")
 	if err != nil {
-		return []string{"Error fetching entries"}
+		return []Entry{}
 	}
 	defer rows.Close()
 
-	var entries []string
+	var entries []Entry
 	for rows.Next() {
+		var id int
+		var title string
 		var encryptedBlob []byte
-		rows.Scan(&encryptedBlob)
+		var createdAt string
+		
+		err := rows.Scan(&id, &title, &encryptedBlob, &createdAt)
+		if err != nil {
+			fmt.Println("Scan error:", err)
+			continue
+		}
+
 		decrypted, _ := a.decrypt(encryptedBlob)
-		entries = append(entries, decrypted)
+		
+		// short preview
+		preview := decrypted
+		if len(preview) > 100 {
+			preview = preview[:100] + "..."
+		}
+
+		entries = append(entries, Entry{
+			ID:        id,
+			Title:     title,
+			Content:   decrypted, 
+			Preview:   preview,
+			CreatedAt: createdAt,
+		})
 	}
 	return entries
 }

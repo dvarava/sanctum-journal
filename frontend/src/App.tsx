@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries } from "../wailsjs/go/main/App";
+import { main } from "../wailsjs/go/models"; // Import models for Entry type
 import { Layout } from "./components/Layout";
 import { Editor } from "./components/Editor";
 import { AIPanel } from "./components/AIPanel";
@@ -14,9 +15,10 @@ function App() {
   const [activeView, setActiveView] = useState("write");
 
   // editor state
+  const [entryTitle, setEntryTitle] = useState("");
   const [journalText, setJournalText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [useCloud, setUseCloud] = useState(false); // Default to Local (Privacy)
+  const [useCloud, setUseCloud] = useState(false); // default to Local (Privacy)
 
   // AI state
   const [aiResponse, setAiResponse] = useState<AnalysisResult | null>(null);
@@ -24,7 +26,7 @@ function App() {
   const [aiStatus, setAiStatus] = useState("");
 
   // history state
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<main.Entry[]>([]);
 
   // load history on mount
   useEffect(() => {
@@ -43,10 +45,11 @@ function App() {
     // simulate a brief delay for visual feedback of "Encrypting"
     await new Promise(r => setTimeout(r, 800));
 
-    await SaveEntry(journalText);
+    await SaveEntry(entryTitle, journalText);
     await refreshHistory();
 
     setJournalText("");
+    setEntryTitle("");
     setIsSaving(false);
   };
 
@@ -87,6 +90,8 @@ function App() {
       case "write":
         return (
           <Editor
+            title={entryTitle}
+            setTitle={setEntryTitle}
             value={journalText}
             onChange={setJournalText}
             onSave={handleSave}

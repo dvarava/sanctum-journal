@@ -1,6 +1,8 @@
-import { Save, Lock, Cloud, Cpu } from 'lucide-react';
+import { Save, Lock, Cloud, Cpu, Sparkles } from 'lucide-react';
 
 interface EditorProps {
+    title: string;
+    setTitle: (val: string) => void;
     value: string;
     onChange: (val: string) => void;
     onSave: () => void;
@@ -10,7 +12,7 @@ interface EditorProps {
     setUseCloud: (val: boolean) => void;
 }
 
-export function Editor({ value, onChange, onSave, isSaving, onAnalyze, useCloud, setUseCloud }: EditorProps) {
+export function Editor({ title, setTitle, value, onChange, onSave, isSaving, onAnalyze, useCloud, setUseCloud }: EditorProps) {
     const dateStr = new Date().toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'long',
@@ -22,9 +24,16 @@ export function Editor({ value, onChange, onSave, isSaving, onAnalyze, useCloud,
         <div className="flex flex-col h-full max-w-3xl mx-auto w-full pt-12 pb-6 px-8 animate-in fade-in duration-700 delay-150">
 
             {/* Header */}
-            <header className="mb-8 text-center">
+            <header className="mb-4 text-center">
                 <span className="text-xs font-semibold tracking-widest text-gray-500 uppercase">{dateStr}</span>
-                <h1 className="text-3xl font-serif text-white/90 mt-2">What's on your mind today?</h1>
+                {/* Title Input */}
+                <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Give your entry a title..."
+                    className="w-full text-center bg-transparent border-none outline-none text-3xl font-serif text-white/90 placeholder:text-white/20 mt-2 focus:ring-0 p-0"
+                />
             </header>
 
             {/* Text Area */}
@@ -39,6 +48,26 @@ export function Editor({ value, onChange, onSave, isSaving, onAnalyze, useCloud,
 
                 {/* Floating Actions */}
                 <div className="absolute bottom-4 right-4 flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+
+                    {/* Inspire Me Button */}
+                    <button
+                        onClick={() => {
+                            const prompts = [
+                                "What is a small win you had today?",
+                                "What is one thing you are grateful for right now?",
+                                "Describe a moment where you felt peaceful today.",
+                                "What is worrying you, and what evidence do you have for it?",
+                                "If you could talk to your younger self today, what would you say?"
+                            ];
+                            const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+                            onChange(value ? value + "\n\n" + randomPrompt : randomPrompt);
+                        }}
+                        className="flex items-center gap-2 bg-gradient-to-r from-pink-500/20 to-purple-500/20 hover:from-pink-500/30 hover:to-purple-500/30 text-pink-200 px-4 py-2 rounded-full border border-pink-500/20 backdrop-blur-sm transition-all shadow-[0_0_15px_rgba(236,72,153,0.1)]"
+                        title="Get a reflection prompt"
+                    >
+                        <Sparkles size={14} />
+                        <span className="text-sm font-medium">Inspire Me</span>
+                    </button>
 
                     {/* Model Toggle */}
                     <div className="flex bg-surface/50 rounded-full border border-white/5 p-1 backdrop-blur-sm">
