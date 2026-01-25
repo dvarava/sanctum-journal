@@ -15,6 +15,7 @@ function App() {
   const [activeView, setActiveView] = useState("write");
 
   // editor state
+  const [currentEntryId, setCurrentEntryId] = useState(0); // 0 = new entry
   const [entryTitle, setEntryTitle] = useState("");
   const [journalText, setJournalText] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -45,11 +46,13 @@ function App() {
     // simulate a brief delay for visual feedback of "Encrypting"
     await new Promise(r => setTimeout(r, 800));
 
-    await SaveEntry(entryTitle, journalText);
+    await SaveEntry(currentEntryId, entryTitle, journalText);
     await refreshHistory();
 
+    // reset editor for new entry
     setJournalText("");
     setEntryTitle("");
+    setCurrentEntryId(0);
     setIsSaving(false);
   };
 
@@ -84,6 +87,13 @@ function App() {
     }
   };
 
+  const handleSelectEntry = (entry: main.Entry) => {
+    setCurrentEntryId(entry.id);
+    setEntryTitle(entry.title);
+    setJournalText(entry.content);
+    setActiveView("write");
+  };
+
   // render the active view
   const renderContent = () => {
     switch (activeView) {
@@ -102,9 +112,8 @@ function App() {
           />
         );
       case "history":
-        return <HistoryList entries={history} />;
+        return <HistoryList entries={history} onSelectEntry={handleSelectEntry} />;
       case "home":
-        // Home redirects to Write for now or shows a dashboard later
         return (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
             <h2 className="text-xl font-semibold mb-2">Welcome Back</h2>

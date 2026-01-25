@@ -8,4 +8,4 @@ export function AnalyzeJournalCloud(arg1:string,arg2:string):Promise<main.Analys
 
 export function GetEntries():Promise<Array<main.Entry>>;
 
-export function SaveEntry(arg1:string,arg2:string):Promise<string>;
+export function SaveEntry(arg1:number,arg2:string,arg3:string):Promise<string>;

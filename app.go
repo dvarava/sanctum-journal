@@ -123,7 +123,7 @@ func (a *App) decrypt(ciphertext []byte) (string, error) {
 }
 
 // exposed methods for frontend
-func (a *App) SaveEntry(title string, text string) string {
+func (a *App) SaveEntry(id int, title string, text string) string {
 	encryptedData, err := a.encrypt(text)
 	if err != nil {
 		return "Error encrypting data: " + err.Error()
@@ -133,7 +133,14 @@ func (a *App) SaveEntry(title string, text string) string {
 		title = "Untitled Entry"
 	}
 
-	_, err = a.db.Exec("INSERT INTO entries (title, content) VALUES (?, ?)", title, encryptedData)
+	if id == 0 {
+		// new entry
+		_, err = a.db.Exec("INSERT INTO entries (title, content) VALUES (?, ?)", title, encryptedData)
+	} else {
+		// update existing entry
+		_, err = a.db.Exec("UPDATE entries SET title = ?, content = ? WHERE id = ?", title, encryptedData, id)
+	}
+
 	if err != nil {
 		return "Error saving to DB: " + err.Error()
 	}

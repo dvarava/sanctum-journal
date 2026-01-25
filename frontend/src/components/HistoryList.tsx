@@ -3,9 +3,10 @@ import { main } from "../../wailsjs/go/models";
 
 interface HistoryListProps {
     entries: main.Entry[];
+    onSelectEntry: (entry: main.Entry) => void;
 }
 
-export function HistoryList({ entries }: HistoryListProps) {
+export function HistoryList({ entries, onSelectEntry }: HistoryListProps) {
     return (
         <div className="p-8 max-w-4xl mx-auto animate-in fade-in duration-500">
             <h2 className="text-2xl font-serif text-white/90 mb-6">Journal History</h2>
@@ -20,6 +21,7 @@ export function HistoryList({ entries }: HistoryListProps) {
                 {entries.map((entry, idx) => (
                     <div
                         key={entry.id}
+                        onClick={() => onSelectEntry(entry)}
                         className="group relative p-6 bg-surface/40 hover:bg-surface/60 border border-white/5 hover:border-white/10 rounded-2xl transition-all duration-300 cursor-pointer overflow-hidden"
                     >
                         <div className="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
