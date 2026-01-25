@@ -41,7 +41,15 @@ func (a *App) startup(ctx context.Context) {
 // initialize the local SQLite database
 func (a *App) initDB() {
 	appDataDir, _ := os.UserConfigDir()
-	dbPath := filepath.Join(appDataDir, "sanctum_proto.db")
+	
+	// dedicated Sanctum directory
+	sanctumDir := filepath.Join(appDataDir, "Sanctum")
+	if err := os.MkdirAll(sanctumDir, 0755); err != nil {
+		fmt.Println("Error creating directory:", err)
+		return
+	}
+
+	dbPath := filepath.Join(sanctumDir, "sanctum_proto.db")
 
 	var err error
 	a.db, err = sql.Open("sqlite3", dbPath)
