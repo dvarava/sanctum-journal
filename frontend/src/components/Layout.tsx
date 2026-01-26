@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Home, PenTool, History as HistoryIcon, Settings } from 'lucide-react';
+import { Home, PenTool, History as HistoryIcon, Settings, BarChart2 } from 'lucide-react';
 
 interface LayoutProps {
     children: ReactNode;
@@ -13,6 +13,7 @@ export function Layout({ children, activeView, onNavigate, rightPanel }: LayoutP
         { id: 'home', icon: Home, label: 'Home' },
         { id: 'write', icon: PenTool, label: 'Write' },
         { id: 'history', icon: HistoryIcon, label: 'History' },
+        { id: 'trends', icon: BarChart2, label: 'Trends' },
         { id: 'settings', icon: Settings, label: 'Settings' },
     ];
 

@@ -39,11 +39,12 @@ func (a *App) startup(ctx context.Context) {
 }
 
 type Entry struct {
-	ID        int    `json:"id"`
-	Title     string `json:"title"`
-	Content   string `json:"content"`
-	Preview   string `json:"preview"`
-	CreatedAt string `json:"created_at"`
+	ID        int      `json:"id"`
+	Title     string   `json:"title"`
+	Content   string   `json:"content"`
+	Preview   string   `json:"preview"`
+	Emotions  []string `json:"emotions"`
+	CreatedAt string   `json:"created_at"`
 }
 
 // initialize the local SQLite database
@@ -71,6 +72,7 @@ func (a *App) initDB() {
 		id INTEGER PRIMARY KEY, 
 		title TEXT DEFAULT '',
 		content BLOB, 
+		emotions TEXT DEFAULT '[]',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);`
 	_, err = a.db.Exec(sqlStmt)
@@ -80,6 +82,7 @@ func (a *App) initDB() {
 
 	// for existing DBs
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN title TEXT DEFAULT '';")
+	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN emotions TEXT DEFAULT '[]';")
 	
 	fmt.Println("Database initialized at:", dbPath)
 }
@@ -123,7 +126,7 @@ func (a *App) decrypt(ciphertext []byte) (string, error) {
 }
 
 // exposed methods for frontend
-func (a *App) SaveEntry(id int, title string, text string) string {
+func (a *App) SaveEntry(id int, title string, text string, emotions []string) string {
 	encryptedData, err := a.encrypt(text)
 	if err != nil {
 		return "Error encrypting data: " + err.Error()
@@ -133,12 +136,18 @@ func (a *App) SaveEntry(id int, title string, text string) string {
 		title = "Untitled Entry"
 	}
 
+	// emotions to JSON string
+	emotionsJSON, _ := json.Marshal(emotions)
+	if emotionsJSON == nil {
+		emotionsJSON = []byte("[]")
+	}
+
 	if id == 0 {
 		// new entry
-		_, err = a.db.Exec("INSERT INTO entries (title, content) VALUES (?, ?)", title, encryptedData)
+		_, err = a.db.Exec("INSERT INTO entries (title, content, emotions) VALUES (?, ?, ?)", title, encryptedData, string(emotionsJSON))
 	} else {
 		// update existing entry
-		_, err = a.db.Exec("UPDATE entries SET title = ?, content = ? WHERE id = ?", title, encryptedData, id)
+		_, err = a.db.Exec("UPDATE entries SET title = ?, content = ?, emotions = ? WHERE id = ?", title, encryptedData, string(emotionsJSON), id)
 	}
 
 	if err != nil {
@@ -148,7 +157,7 @@ func (a *App) SaveEntry(id int, title string, text string) string {
 }
 
 func (a *App) GetEntries() []Entry {
-	rows, err := a.db.Query("SELECT id, title, content, created_at FROM entries ORDER BY id DESC")
+	rows, err := a.db.Query("SELECT id, title, content, emotions, created_at FROM entries ORDER BY id DESC")
 	if err != nil {
 		return []Entry{}
 	}
@@ -159,9 +168,10 @@ func (a *App) GetEntries() []Entry {
 		var id int
 		var title string
 		var encryptedBlob []byte
+		var emotionsJSON string
 		var createdAt string
 		
-		err := rows.Scan(&id, &title, &encryptedBlob, &createdAt)
+		err := rows.Scan(&id, &title, &encryptedBlob, &emotionsJSON, &createdAt)
 		if err != nil {
 			fmt.Println("Scan error:", err)
 			continue
@@ -175,11 +185,15 @@ func (a *App) GetEntries() []Entry {
 			preview = preview[:100] + "..."
 		}
 
+		var emotions []string
+		_ = json.Unmarshal([]byte(emotionsJSON), &emotions)
+
 		entries = append(entries, Entry{
 			ID:        id,
 			Title:     title,
 			Content:   decrypted, 
 			Preview:   preview,
+			Emotions:  emotions,
 			CreatedAt: createdAt,
 		})
 	}

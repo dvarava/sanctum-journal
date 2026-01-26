@@ -19,6 +19,7 @@ export namespace main {
 	    title: string;
 	    content: string;
 	    preview: string;
+	    emotions: string[];
 	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
@@ -31,6 +32,7 @@ export namespace main {
 	        this.title = source["title"];
 	        this.content = source["content"];
 	        this.preview = source["preview"];
+	        this.emotions = source["emotions"];
 	        this.created_at = source["created_at"];
 	    }
 	}

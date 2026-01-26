@@ -14,6 +14,6 @@ export function GetEntries() {
   return window['go']['main']['App']['GetEntries']();
 }
 
-export function SaveEntry(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SaveEntry'](arg1, arg2, arg3);
+export function SaveEntry(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SaveEntry'](arg1, arg2, arg3, arg4);
 }

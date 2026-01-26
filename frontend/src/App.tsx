@@ -5,6 +5,7 @@ import { Layout } from "./components/Layout";
 import { Editor } from "./components/Editor";
 import { AIPanel } from "./components/AIPanel";
 import { HistoryList } from "./components/HistoryList";
+import { TrendsChart } from "./components/TrendsChart";
 
 interface AnalysisResult {
   emotions: string[];
@@ -46,12 +47,16 @@ function App() {
     // simulate a brief delay for visual feedback of "Encrypting"
     await new Promise(r => setTimeout(r, 800));
 
-    await SaveEntry(currentEntryId, entryTitle, journalText);
+    // pass detected emotions if available
+    const emotionsToSave = aiResponse?.emotions || [];
+
+    await SaveEntry(currentEntryId, entryTitle, journalText, emotionsToSave);
     await refreshHistory();
 
     // reset editor for new entry
     setJournalText("");
     setEntryTitle("");
+    setAiResponse(null);
     setCurrentEntryId(0);
     setIsSaving(false);
   };
@@ -91,6 +96,12 @@ function App() {
     setCurrentEntryId(entry.id);
     setEntryTitle(entry.title);
     setJournalText(entry.content);
+
+    if (entry.emotions && entry.emotions.length > 0) {
+      setAiResponse({ emotions: entry.emotions, coaching: "Analysis from history." });
+    } else {
+      setAiResponse(null);
+    }
     setActiveView("write");
   };
 
@@ -113,6 +124,13 @@ function App() {
         );
       case "history":
         return <HistoryList entries={history} onSelectEntry={handleSelectEntry} />;
+      case "trends":
+        return (
+          <div className="p-8 max-w-4xl mx-auto">
+            <h2 className="text-2xl font-serif text-white/90 mb-6">Emotional Trends</h2>
+            <TrendsChart entries={history} />
+          </div>
+        );
       case "home":
         return (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
