@@ -5,8 +5,8 @@ import { Layout } from "./components/Layout";
 import { Editor } from "./components/Editor";
 import { AIPanel } from "./components/AIPanel";
 import { HistoryList } from "./components/HistoryList";
-import { TrendsChart } from "./components/TrendsChart";
 import { Heatmap } from "./components/Heatmap";
+import { MoodLineChart } from "./components/MoodLineChart";
 
 interface AnalysisResult {
   emotions: string[];
@@ -146,13 +146,7 @@ function App() {
         );
       case "history":
         return <HistoryList entries={history} onSelectEntry={handleSelectEntry} />;
-      case "trends":
-        return (
-          <div className="p-8 max-w-4xl mx-auto">
-            <h2 className="text-2xl font-serif text-white/90 mb-6">Emotional Trends</h2>
-            <TrendsChart entries={history} />
-          </div>
-        );
+
       case "home":
         return (
           <div className="flex flex-col items-center justify-center h-full gap-8 p-8 animate-in fade-in duration-700">
@@ -161,7 +155,14 @@ function App() {
               <p className="text-gray-400 font-light">What's on your mind today?</p>
             </div>
 
-            <Heatmap entries={history} />
+            <div className="flex flex-wrap items-stretch justify-center gap-6 w-full max-w-5xl">
+              <div className="flex-1 min-w-[300px]">
+                <Heatmap entries={history} />
+              </div>
+              <div className="flex-1 min-w-[300px]">
+                <MoodLineChart entries={history} />
+              </div>
+            </div>
 
             <button
               onClick={() => setActiveView("write")}
