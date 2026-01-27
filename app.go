@@ -156,6 +156,14 @@ func (a *App) SaveEntry(id int, title string, text string, emotions []string) st
 	return "Entry saved securely."
 }
 
+func (a *App) DeleteEntry(id int) string {
+	_, err := a.db.Exec("DELETE FROM entries WHERE id = ?", id)
+	if err != nil {
+		return "Error deleting entry: " + err.Error()
+	}
+	return "Entry deleted."
+}
+
 func (a *App) GetEntries() []Entry {
 	rows, err := a.db.Query("SELECT id, title, content, emotions, created_at FROM entries ORDER BY id DESC")
 	if err != nil {

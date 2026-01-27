@@ -1,4 +1,4 @@
-import { Save, Lock, Cloud, Cpu, Sparkles } from 'lucide-react';
+import { Save, Lock, Cloud, Cpu, Sparkles, Trash, Plus } from 'lucide-react';
 
 interface EditorProps {
     title: string;
@@ -6,13 +6,16 @@ interface EditorProps {
     value: string;
     onChange: (val: string) => void;
     onSave: () => void;
+    onDelete: () => void;
+    onNew: () => void;
+    currentEntryId: number;
     isSaving: boolean;
     onAnalyze: () => void;
     useCloud: boolean;
     setUseCloud: (val: boolean) => void;
 }
 
-export function Editor({ title, setTitle, value, onChange, onSave, isSaving, onAnalyze, useCloud, setUseCloud }: EditorProps) {
+export function Editor({ title, setTitle, value, onChange, onSave, onDelete, onNew, currentEntryId, isSaving, onAnalyze, useCloud, setUseCloud }: EditorProps) {
     const dateStr = new Date().toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'long',
@@ -21,7 +24,19 @@ export function Editor({ title, setTitle, value, onChange, onSave, isSaving, onA
     });
 
     return (
-        <div className="flex flex-col h-full max-w-3xl mx-auto w-full pt-12 pb-6 px-8 animate-in fade-in duration-700 delay-150">
+        <div className="flex flex-col h-full max-w-3xl mx-auto w-full pt-12 pb-6 px-8 animate-in fade-in duration-700 delay-150 relative">
+
+            {/* New Entry Button (Top Right) */}
+            {(currentEntryId > 0 || value.length > 0) && (
+                <button
+                    onClick={onNew}
+                    className="absolute top-8 right-0 text-gray-500 hover:text-white transition-colors flex items-center gap-1 text-xs uppercase tracking-wider"
+                    title="Start fresh entry"
+                >
+                    <Plus size={14} />
+                    New Entry
+                </button>
+            )}
 
             {/* Header */}
             <header className="mb-4 text-center">
@@ -86,6 +101,17 @@ export function Editor({ title, setTitle, value, onChange, onSave, isSaving, onA
                             <Cloud size={14} />
                         </button>
                     </div>
+
+                    {/* Delete Button (Only for existing entries) */}
+                    {currentEntryId > 0 && (
+                        <button
+                            onClick={onDelete}
+                            className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-full border border-red-500/20 backdrop-blur-sm transition-all"
+                            title="Delete this entry"
+                        >
+                            <Trash size={16} />
+                        </button>
+                    )}
 
                     <button
                         onClick={onSave}

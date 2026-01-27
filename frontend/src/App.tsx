@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries } from "../wailsjs/go/main/App";
-import { main } from "../wailsjs/go/models"; // Import models for Entry type
+import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries, DeleteEntry } from "../wailsjs/go/main/App";
+import { main } from "../wailsjs/go/models";
 import { Layout } from "./components/Layout";
 import { Editor } from "./components/Editor";
 import { AIPanel } from "./components/AIPanel";
@@ -93,6 +93,25 @@ function App() {
     }
   };
 
+  const handleDelete = async () => {
+    if (currentEntryId === 0) return;
+
+    // need to add a confirmation modal here
+    await DeleteEntry(currentEntryId);
+    await refreshHistory();
+
+    handleNewEntry();
+  };
+
+  const handleNewEntry = () => {
+    setJournalText("");
+    setEntryTitle("");
+    setAiResponse(null);
+    setCurrentEntryId(0);
+    setIsSaving(false);
+    setActiveView("write");
+  };
+
   const handleSelectEntry = (entry: main.Entry) => {
     setCurrentEntryId(entry.id);
     setEntryTitle(entry.title);
@@ -116,6 +135,9 @@ function App() {
             value={journalText}
             onChange={setJournalText}
             onSave={handleSave}
+            onDelete={handleDelete}
+            onNew={handleNewEntry}
+            currentEntryId={currentEntryId}
             isSaving={isSaving}
             onAnalyze={handleAnalyze}
             useCloud={useCloud}
