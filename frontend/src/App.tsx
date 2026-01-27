@@ -6,6 +6,7 @@ import { Editor } from "./components/Editor";
 import { AIPanel } from "./components/AIPanel";
 import { HistoryList } from "./components/HistoryList";
 import { TrendsChart } from "./components/TrendsChart";
+import { Heatmap } from "./components/Heatmap";
 
 interface AnalysisResult {
   emotions: string[];
@@ -96,7 +97,6 @@ function App() {
     setCurrentEntryId(entry.id);
     setEntryTitle(entry.title);
     setJournalText(entry.content);
-
     if (entry.emotions && entry.emotions.length > 0) {
       setAiResponse({ emotions: entry.emotions, coaching: "Analysis from history." });
     } else {
@@ -133,9 +133,20 @@ function App() {
         );
       case "home":
         return (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500">
-            <h2 className="text-xl font-semibold mb-2">Welcome Back</h2>
-            <button onClick={() => setActiveView("write")} className="text-accent hover:underline">Start Journaling</button>
+          <div className="flex flex-col items-center justify-center h-full gap-8 p-8 animate-in fade-in duration-700">
+            <div className="text-center">
+              <h2 className="text-3xl font-serif text-white/90 mb-2">Good Morning, Alex.</h2>
+              <p className="text-gray-400 font-light">What's on your mind today?</p>
+            </div>
+
+            <Heatmap entries={history} />
+
+            <button
+              onClick={() => setActiveView("write")}
+              className="px-8 py-3 bg-white text-slate-900 font-semibold rounded-full hover:bg-accent/90 transition-all shadow-[0_0_20px_rgba(45,212,191,0.3)]"
+            >
+              Start Writing
+            </button>
           </div>
         );
       default:
