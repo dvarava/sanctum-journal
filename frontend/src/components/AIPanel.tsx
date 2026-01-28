@@ -82,6 +82,11 @@ export function AIPanel({ analysis, loading, status, useCloud }: AIPanelProps) {
                         : "Your entries are encrypted and analyzed locally. No data leaves this device."}
                 </p>
             </div>
+
+            {/* Medical Disclaimer */}
+            <p className="text-[10px] text-center text-gray-500/60 pb-2 select-none">
+                Sanctum is for self-reflection. Not a substitute for professional medical advice.
+            </p>
         </div>
     );
 }

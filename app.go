@@ -222,6 +222,11 @@ func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	Return a valid JSON object with two keys:
 	1. "emotions": a list of 1-3 detected emotions (e.g., ["Anxious", "Hopeful"]).
 	2. "coaching": a brief, supportive coaching tip (under 50 words).
+	
+	IMPORTANT SAFETY RULES:
+	- Do NOT provide medical diagnoses or prescriptions.
+	- If the user asks for medical advice, return "I cannot provide medical advice. Please consult a professional." as the coaching tip.
+	
 	Do not include markdown formatting like asterisk or backticks. JSON only.`, entryText)
 
 	requestBody, _ := json.Marshal(map[string]interface{}{
