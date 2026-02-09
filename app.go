@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -216,18 +217,31 @@ type AnalysisResult struct {
 // function to send text to local Ollama instance and return structured data
 func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	url := "http://localhost:11434/api/generate"
-	
+
+	// check for crisis keywords before invoking LLM
+	lowerText := strings.ToLower(entryText)
+	if strings.Contains(lowerText, "pill") || 
+	   strings.Contains(lowerText, "medication") || 
+	   strings.Contains(lowerText, "doctor") ||
+	   strings.Contains(lowerText, "prescription") ||
+	   strings.Contains(lowerText, "medical") {
+		return AnalysisResult{
+			Emotions: []string{"Concerned"},
+			Coaching: "I cannot provide medical advice. Please consult a professional.",
+		}
+	}
+
 	// system prompt
-	prompt := fmt.Sprintf(`You are an empathetic mental health coach. Analyze this journal entry: '%s'. 
-	Return a valid JSON object with two keys:
-	1. "emotions": a list of 1-3 detected emotions (e.g., ["Anxious", "Hopeful"]).
-	2. "coaching": a brief, supportive coaching tip (under 50 words).
-	
-	IMPORTANT SAFETY RULES:
-	- Do NOT provide medical diagnoses or prescriptions.
-	- If the user asks for medical advice, return "I cannot provide medical advice. Please consult a professional." as the coaching tip.
-	
-	Do not include markdown formatting like asterisk or backticks. JSON only.`, entryText)
+	prompt := fmt.Sprintf(`You are a mental health assistant. Analyze this entry: "%s"
+
+Return a JSON object with:
+1. "emotions": Array of 1-3 detected emotions.
+2. "coaching": A single, punchy cognitive reframe (MAX 15 WORDS).
+
+Example:
+{"emotions": ["Anxious"], "coaching": "Your productivity does not define your worth."}
+
+JSON Response:`, entryText)
 
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"model":  "gemma:2b",
@@ -254,7 +268,6 @@ func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	var analysis AnalysisResult
 	err = json.Unmarshal([]byte(responseStr), &analysis)
 	if err != nil {
-		// fallback if model didn't output perfect JSON
 		return AnalysisResult{
 			Emotions: []string{"Uncertain"}, 
 			Coaching: responseStr,
