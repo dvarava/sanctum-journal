@@ -22,6 +22,14 @@ export function GetEntries() {
   return window['go']['main']['App']['GetEntries']();
 }
 
+export function GetSettings() {
+  return window['go']['main']['App']['GetSettings']();
+}
+
 export function SaveEntry(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['SaveEntry'](arg1, arg2, arg3, arg4);
+}
+
+export function SaveSettings(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SaveSettings'](arg1, arg2, arg3, arg4);
 }

@@ -48,6 +48,13 @@ type Entry struct {
 	CreatedAt string   `json:"created_at"`
 }
 
+type Settings struct {
+	CoachingStyle string `json:"coaching_style"` // compassionate, direct, socratic, motivational
+	AnalysisDepth string `json:"analysis_depth"` // brief, detailed
+	ModelName     string `json:"model_name"`     // ollama model to use
+	UserName      string `json:"user_name"`      // for personalised greeting
+}
+
 // initialize the local SQLite database
 func (a *App) initDB() {
 	appDataDir, _ := os.UserConfigDir()
@@ -85,7 +92,61 @@ func (a *App) initDB() {
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN title TEXT DEFAULT '';")
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN emotions TEXT DEFAULT '[]';")
 
+	// settings table
+	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS settings (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		coaching_style TEXT DEFAULT 'compassionate',
+		analysis_depth TEXT DEFAULT 'brief',
+		model_name TEXT DEFAULT 'gemma:2b',
+		user_name TEXT DEFAULT ''
+	);`)
+	if err != nil {
+		fmt.Println("Error creating settings table:", err)
+	}
+	// ensure defaults row exists
+	_, _ = a.db.Exec(`INSERT OR IGNORE INTO settings (id) VALUES (1);`)
+
+	// migrations for existing DBs
+	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN user_name TEXT DEFAULT '';")
+
 	fmt.Println("Database initialized at:", dbPath)
+}
+
+// settings methods
+func (a *App) GetSettings() Settings {
+	defaults := Settings{
+		CoachingStyle: "compassionate",
+		AnalysisDepth: "brief",
+		ModelName:     "gemma:2b",
+		UserName:      "",
+	}
+
+	if a.db == nil {
+		return defaults
+	}
+
+	row := a.db.QueryRow("SELECT coaching_style, analysis_depth, model_name, user_name FROM settings WHERE id = 1")
+	var s Settings
+	err := row.Scan(&s.CoachingStyle, &s.AnalysisDepth, &s.ModelName, &s.UserName)
+	if err != nil {
+		return defaults
+	}
+	return s
+}
+
+func (a *App) SaveSettings(coachingStyle, analysisDepth, modelName, userName string) string {
+	if a.db == nil {
+		return "Database not initialized"
+	}
+
+	_, err := a.db.Exec(
+		"UPDATE settings SET coaching_style = ?, analysis_depth = ?, model_name = ?, user_name = ? WHERE id = 1",
+		coachingStyle, analysisDepth, modelName, userName,
+	)
+	if err != nil {
+		return "Error saving settings: " + err.Error()
+	}
+	return "Settings saved."
 }
 
 // encryption helpers
@@ -270,7 +331,7 @@ func (a *App) CheckCrisisMarkers(text string) CrisisResult {
 func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	url := "http://localhost:11434/api/generate"
 
-	// check for crisis markers before invoking LLM — blocks AI analysis if crisis detected
+	// check for crisis markers before invoking LLM
 	crisis := a.CheckCrisisMarkers(entryText)
 	if crisis.IsCrisis {
 		return AnalysisResult{
@@ -279,8 +340,30 @@ func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 		}
 	}
 
-	// system prompt
+	// load user settings to personalise the coaching style
+	settings := a.GetSettings()
+
+	// map coaching style to system prompt personality
+	styleDirective := map[string]string{
+		"compassionate": "Respond with warmth, empathy, and gentle encouragement. Validate feelings before reframing.",
+		"direct":        "Be concise, honest, and straightforward. Focus on actionable insight without sugar-coating.",
+		"socratic":      "Respond with a thought-provoking question that helps the user discover their own insight.",
+		"motivational":  "Be energising and uplifting. Focus on strengths, growth, and forward momentum.",
+	}[settings.CoachingStyle]
+	if styleDirective == "" {
+		styleDirective = "Respond with warmth, empathy, and gentle encouragement."
+	}
+
+	// coaching depth
+	depthDirective := "A single, punchy cognitive reframe (MAX 15 WORDS)."
+	if settings.AnalysisDepth == "detailed" {
+		depthDirective = "A thoughtful 2-3 sentence coaching response with a cognitive reframe and one actionable suggestion."
+	}
+
+	// system prompt with injected style
 	prompt := fmt.Sprintf(`You are a supportive journaling coach. Analyze this journal entry: "%s"
+
+COACHING STYLE: %s
 
 IMPORTANT RULES:
 - You are NOT a therapist or medical professional.
@@ -290,15 +373,15 @@ IMPORTANT RULES:
 
 Return a JSON object with:
 1. "emotions": Array of 1-3 detected emotions.
-2. "coaching": A single, punchy cognitive reframe (MAX 15 WORDS).
+2. "coaching": %s
 
 Example:
 {"emotions": ["Anxious"], "coaching": "Your productivity does not define your worth."}
 
-JSON Response:`, entryText)
+JSON Response:`, entryText, styleDirective, depthDirective)
 
 	requestBody, _ := json.Marshal(map[string]interface{}{
-		"model":  "gemma:2b",
+		"model":  settings.ModelName,
 		"prompt": prompt,
 		"stream": false,
 		"format": "json",

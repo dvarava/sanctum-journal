@@ -52,6 +52,24 @@ export namespace main {
 	        this.created_at = source["created_at"];
 	    }
 	}
+	export class Settings {
+	    coaching_style: string;
+	    analysis_depth: string;
+	    model_name: string;
+	    user_name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Settings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.coaching_style = source["coaching_style"];
+	        this.analysis_depth = source["analysis_depth"];
+	        this.model_name = source["model_name"];
+	        this.user_name = source["user_name"];
+	    }
+	}
 
 }
 

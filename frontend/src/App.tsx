@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries, DeleteEntry, CheckCrisisMarkers } from "../wailsjs/go/main/App";
+import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries, DeleteEntry, CheckCrisisMarkers, GetSettings } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 import { Layout } from "./components/Layout";
 import { Editor } from "./components/Editor";
@@ -8,6 +8,7 @@ import { HistoryList } from "./components/HistoryList";
 import { Heatmap } from "./components/Heatmap";
 import { MoodLineChart } from "./components/MoodLineChart";
 import { CrisisScreen } from "./components/CrisisScreen";
+import { Settings } from "./components/Settings";
 
 interface AnalysisResult {
   emotions: string[];
@@ -37,10 +38,21 @@ function App() {
   // history state
   const [history, setHistory] = useState<main.Entry[]>([]);
 
-  // load history on mount
+  // user display name
+  const [displayName, setDisplayName] = useState("");
+
+  // load history + settings on mount and when navigating views
   useEffect(() => {
     refreshHistory();
-  }, []);
+    loadDisplayName();
+  }, [activeView]);
+
+  const loadDisplayName = async () => {
+    try {
+      const s = await GetSettings();
+      setDisplayName(s.user_name || "");
+    } catch { }
+  };
 
   // debounced real-time crisis checking as user types
   const checkForCrisis = useCallback((text: string) => {
@@ -189,10 +201,13 @@ function App() {
         return <HistoryList entries={history} onSelectEntry={handleSelectEntry} />;
 
       case "home":
+        const hour = new Date().getHours();
+        const timeGreeting = hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
+        const greeting = displayName ? `${timeGreeting}, ${displayName}.` : `${timeGreeting}.`;
         return (
           <div className="flex flex-col items-center justify-center h-full gap-8 p-8 animate-in fade-in duration-700">
             <div className="text-center">
-              <h2 className="text-3xl font-serif text-white/90 mb-2">Good Morning, Alex.</h2>
+              <h2 className="text-3xl font-serif text-white/90 mb-2">{greeting}</h2>
               <p className="text-gray-400 font-light">What's on your mind today?</p>
             </div>
 
@@ -213,6 +228,8 @@ function App() {
             </button>
           </div>
         );
+      case "settings":
+        return <Settings />;
       default:
         return <div className="p-10 text-center text-gray-500">Work in Progress</div>;
     }
