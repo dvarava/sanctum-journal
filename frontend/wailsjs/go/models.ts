@@ -14,6 +14,22 @@ export namespace main {
 	        this.coaching = source["coaching"];
 	    }
 	}
+	export class CrisisResult {
+	    is_crisis: boolean;
+	    severity: string;
+	    patterns: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CrisisResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.is_crisis = source["is_crisis"];
+	        this.severity = source["severity"];
+	        this.patterns = source["patterns"];
+	    }
+	}
 	export class Entry {
 	    id: number;
 	    title: string;

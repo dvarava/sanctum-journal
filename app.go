@@ -14,20 +14,20 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+	"regexp"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type App struct {
-	ctx      context.Context
-	db       *sql.DB
+	ctx       context.Context
+	db        *sql.DB
 	secretKey []byte // just for prototype, will derive this from a user password using Argon2 in future
 }
 
 func NewApp() *App {
 	// for prototype: Hardcoded 32-byte key (AES-256).
-    // in production, replace with Argon2 key derivation from user password
+	// in production, replace with Argon2 key derivation from user password
 	key, _ := hex.DecodeString("6368616e676520746869732070617373776f726420746f206120736563726574")
 	return &App{
 		secretKey: key,
@@ -51,7 +51,7 @@ type Entry struct {
 // initialize the local SQLite database
 func (a *App) initDB() {
 	appDataDir, _ := os.UserConfigDir()
-	
+
 	// dedicated Sanctum directory
 	sanctumDir := filepath.Join(appDataDir, "Sanctum")
 	if err := os.MkdirAll(sanctumDir, 0755); err != nil {
@@ -84,7 +84,7 @@ func (a *App) initDB() {
 	// for existing DBs
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN title TEXT DEFAULT '';")
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN emotions TEXT DEFAULT '[]';")
-	
+
 	fmt.Println("Database initialized at:", dbPath)
 }
 
@@ -179,7 +179,7 @@ func (a *App) GetEntries() []Entry {
 		var encryptedBlob []byte
 		var emotionsJSON string
 		var createdAt string
-		
+
 		err := rows.Scan(&id, &title, &encryptedBlob, &emotionsJSON, &createdAt)
 		if err != nil {
 			fmt.Println("Scan error:", err)
@@ -187,7 +187,7 @@ func (a *App) GetEntries() []Entry {
 		}
 
 		decrypted, _ := a.decrypt(encryptedBlob)
-		
+
 		// short preview
 		preview := decrypted
 		if len(preview) > 100 {
@@ -200,7 +200,7 @@ func (a *App) GetEntries() []Entry {
 		entries = append(entries, Entry{
 			ID:        id,
 			Title:     title,
-			Content:   decrypted, 
+			Content:   decrypted,
 			Preview:   preview,
 			Emotions:  emotions,
 			CreatedAt: createdAt,
@@ -214,25 +214,79 @@ type AnalysisResult struct {
 	Coaching string   `json:"coaching"`
 }
 
+// Crisis detection
+type CrisisResult struct {
+	IsCrisis bool     `json:"is_crisis"`
+	Severity string   `json:"severity"` // "high" or "moderate"
+	Patterns []string `json:"patterns"`
+}
+
+// compiled regex patterns for crisis detection
+var crisisPatterns = []struct {
+	Pattern  *regexp.Regexp
+	Label    string
+	Severity string
+}{
+	// HIGH severity — immediate risk indicators
+	{regexp.MustCompile(`(?i)\b(kill\s+(myself|me)|end\s+(my\s+life|it\s+all)|suicide|suicidal|want\s+to\s+die|don'?t\s+want\s+to\s+(live|be\s+alive|exist))\b`), "suicidal ideation", "high"},
+	{regexp.MustCompile(`(?i)\b(cut(ting)?\s+(myself|my\s+(wrist|arm|skin))|self[\s-]?harm(ing)?|hurt(ing)?\s+myself|burn(ing)?\s+myself)`), "self-harm", "high"},
+	{regexp.MustCompile(`(?i)\b(plan(ning)?\s+to\s+(die|end)|method\s+to\s+(die|end)|goodbye\s+(letter|note|everyone|world)|no\s+reason\s+to\s+(live|go\s+on))\b`), "crisis planning", "high"},
+
+	// MODERATE severity — distress signals that warrant gentle intervention
+	{regexp.MustCompile(`(?i)\b(everyone\s+would\s+be\s+better\s+off\s+without\s+me|i\s+am\s+a\s+burden|can'?t\s+take\s+(it|this)\s+anymore|i\s+give\s+up\s+on\s+(life|everything))\b`), "hopelessness", "moderate"},
+	{regexp.MustCompile(`(?i)\b(overdose|swallow(ing)?\s+pills\s+to|jump(ing)?\s+off|hang(ing)?\s+myself)\b`), "means reference", "high"},
+}
+
+// CheckCrisisMarkers scans text for crisis indicators using regex.
+// This is intentionally separate from the LLM to guarantee it works offline and instantly.
+func (a *App) CheckCrisisMarkers(text string) CrisisResult {
+	result := CrisisResult{
+		IsCrisis: false,
+		Severity: "",
+		Patterns: []string{},
+	}
+
+	highestSeverity := ""
+
+	for _, cp := range crisisPatterns {
+		if cp.Pattern.MatchString(text) {
+			result.IsCrisis = true
+			result.Patterns = append(result.Patterns, cp.Label)
+
+			// track highest severity
+			if cp.Severity == "high" {
+				highestSeverity = "high"
+			} else if highestSeverity == "" {
+				highestSeverity = cp.Severity
+			}
+		}
+	}
+
+	result.Severity = highestSeverity
+	return result
+}
+
 // function to send text to local Ollama instance and return structured data
 func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	url := "http://localhost:11434/api/generate"
 
-	// check for crisis keywords before invoking LLM
-	lowerText := strings.ToLower(entryText)
-	if strings.Contains(lowerText, "pill") || 
-	   strings.Contains(lowerText, "medication") || 
-	   strings.Contains(lowerText, "doctor") ||
-	   strings.Contains(lowerText, "prescription") ||
-	   strings.Contains(lowerText, "medical") {
+	// check for crisis markers before invoking LLM — blocks AI analysis if crisis detected
+	crisis := a.CheckCrisisMarkers(entryText)
+	if crisis.IsCrisis {
 		return AnalysisResult{
-			Emotions: []string{"Concerned"},
-			Coaching: "I cannot provide medical advice. Please consult a professional.",
+			Emotions: []string{"Crisis Detected"},
+			Coaching: "AI coaching is paused for your safety. Please see the crisis resources displayed.",
 		}
 	}
 
 	// system prompt
-	prompt := fmt.Sprintf(`You are a mental health assistant. Analyze this entry: "%s"
+	prompt := fmt.Sprintf(`You are a supportive journaling coach. Analyze this journal entry: "%s"
+
+IMPORTANT RULES:
+- You are NOT a therapist or medical professional.
+- Never diagnose conditions or prescribe treatments.
+- Focus on cognitive reframing and self-reflection.
+- If the entry mentions professional help, encourage it.
 
 Return a JSON object with:
 1. "emotions": Array of 1-3 detected emotions.
@@ -269,11 +323,11 @@ JSON Response:`, entryText)
 	err = json.Unmarshal([]byte(responseStr), &analysis)
 	if err != nil {
 		return AnalysisResult{
-			Emotions: []string{"Uncertain"}, 
+			Emotions: []string{"Uncertain"},
 			Coaching: responseStr,
 		}
 	}
-	
+
 	return analysis
 }
 

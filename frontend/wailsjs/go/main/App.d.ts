@@ -6,6 +6,8 @@ export function AnalyzeJournal(arg1:string):Promise<main.AnalysisResult>;
 
 export function AnalyzeJournalCloud(arg1:string,arg2:string):Promise<main.AnalysisResult>;
 
+export function CheckCrisisMarkers(arg1:string):Promise<main.CrisisResult>;
+
 export function DeleteEntry(arg1:number):Promise<string>;
 
 export function GetEntries():Promise<Array<main.Entry>>;

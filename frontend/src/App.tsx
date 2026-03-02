@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries, DeleteEntry } from "../wailsjs/go/main/App";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries, DeleteEntry, CheckCrisisMarkers } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 import { Layout } from "./components/Layout";
 import { Editor } from "./components/Editor";
@@ -7,6 +7,7 @@ import { AIPanel } from "./components/AIPanel";
 import { HistoryList } from "./components/HistoryList";
 import { Heatmap } from "./components/Heatmap";
 import { MoodLineChart } from "./components/MoodLineChart";
+import { CrisisScreen } from "./components/CrisisScreen";
 
 interface AnalysisResult {
   emotions: string[];
@@ -28,6 +29,11 @@ function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiStatus, setAiStatus] = useState("");
 
+  // crisis state
+  const [isCrisisActive, setIsCrisisActive] = useState(false);
+  const [crisisSeverity, setCrisisSeverity] = useState("");
+  const crisisTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // history state
   const [history, setHistory] = useState<main.Entry[]>([]);
 
@@ -35,6 +41,41 @@ function App() {
   useEffect(() => {
     refreshHistory();
   }, []);
+
+  // debounced real-time crisis checking as user types
+  const checkForCrisis = useCallback((text: string) => {
+    if (crisisTimerRef.current) {
+      clearTimeout(crisisTimerRef.current);
+    }
+    // only check if there's enough text to be meaningful
+    if (text.length < 10) {
+      setIsCrisisActive(false);
+      return;
+    }
+    crisisTimerRef.current = setTimeout(async () => {
+      try {
+        const result = await CheckCrisisMarkers(text);
+        if (result.is_crisis) {
+          setIsCrisisActive(true);
+          setCrisisSeverity(result.severity);
+        }
+        // intentionally don't auto-clear crisis — user must dismiss
+      } catch {
+        // fail silently — crisis check is supplementary
+      }
+    }, 800); // 800ms debounce
+  }, []);
+
+  // wire crisis check to text changes
+  const handleTextChange = (text: string) => {
+    setJournalText(text);
+    checkForCrisis(text);
+  };
+
+  const handleCrisisDismiss = () => {
+    setIsCrisisActive(false);
+    setCrisisSeverity("");
+  };
 
   const refreshHistory = async () => {
     const entries = await GetEntries();
@@ -63,7 +104,7 @@ function App() {
   };
 
   const handleAnalyze = async () => {
-    if (!journalText) return;
+    if (!journalText || isCrisisActive) return;
     setIsAnalyzing(true);
 
     if (useCloud) {
@@ -133,7 +174,7 @@ function App() {
             title={entryTitle}
             setTitle={setEntryTitle}
             value={journalText}
-            onChange={setJournalText}
+            onChange={handleTextChange}
             onSave={handleSave}
             onDelete={handleDelete}
             onNew={handleNewEntry}
@@ -178,22 +219,32 @@ function App() {
   };
 
   return (
-    <Layout
-      activeView={activeView}
-      onNavigate={setActiveView}
-      rightPanel={
-        activeView === "write" ? (
-          <AIPanel
-            analysis={aiResponse}
-            loading={isAnalyzing}
-            status={aiStatus}
-            useCloud={useCloud}
-          />
-        ) : undefined
-      }
-    >
-      {renderContent()}
-    </Layout>
+    <>
+      {/* Crisis overlay — renders on top of everything */}
+      {isCrisisActive && (
+        <CrisisScreen
+          severity={crisisSeverity}
+          onDismiss={handleCrisisDismiss}
+        />
+      )}
+
+      <Layout
+        activeView={activeView}
+        onNavigate={setActiveView}
+        rightPanel={
+          activeView === "write" ? (
+            <AIPanel
+              analysis={aiResponse}
+              loading={isAnalyzing}
+              status={aiStatus}
+              useCloud={useCloud}
+            />
+          ) : undefined
+        }
+      >
+        {renderContent()}
+      </Layout>
+    </>
   );
 }
 
