@@ -9,6 +9,7 @@ import { Heatmap } from "./components/Heatmap";
 import { MoodLineChart } from "./components/MoodLineChart";
 import { CrisisScreen } from "./components/CrisisScreen";
 import { Settings } from "./components/Settings";
+import { InsightToast } from "./components/InsightToast";
 
 interface AnalysisResult {
   emotions: string[];
@@ -29,6 +30,10 @@ function App() {
   const [aiResponse, setAiResponse] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiStatus, setAiStatus] = useState("");
+
+  // auto-coaching insight
+  const [pendingInsight, setPendingInsight] = useState<AnalysisResult | null>(null);
+  const [pendingInsightContext, setPendingInsightContext] = useState<{ text: string; title: string } | null>(null);
 
   // crisis state
   const [isCrisisActive, setIsCrisisActive] = useState(false);
@@ -98,6 +103,10 @@ function App() {
     if (!journalText) return;
     setIsSaving(true);
 
+    // capture text and title before clearing editor
+    const textToAnalyze = journalText;
+    const savedTitle = entryTitle;
+
     // simulate a brief delay for visual feedback of "Encrypting"
     await new Promise(r => setTimeout(r, 800));
 
@@ -113,6 +122,18 @@ function App() {
     setAiResponse(null);
     setCurrentEntryId(0);
     setIsSaving(false);
+
+    // background auto-coaching — fire and forget, don't block the UI
+    if (textToAnalyze.length >= 20 && !isCrisisActive) {
+      AnalyzeJournal(textToAnalyze)
+        .then((result) => {
+          if (result.coaching && !result.emotions?.includes("Crisis Detected")) {
+            setPendingInsight(result);
+            setPendingInsightContext({ text: textToAnalyze, title: savedTitle });
+          }
+        })
+        .catch(() => { }); // silently fail — auto-coaching is supplementary
+    }
   };
 
   const handleAnalyze = async () => {
@@ -237,11 +258,33 @@ function App() {
 
   return (
     <>
-      {/* Crisis overlay — renders on top of everything */}
+      {/* Crisis overlay */}
       {isCrisisActive && (
         <CrisisScreen
           severity={crisisSeverity}
           onDismiss={handleCrisisDismiss}
+        />
+      )}
+
+      {/* Auto-coaching insight toast */}
+      {pendingInsight && (
+        <InsightToast
+          emotions={pendingInsight.emotions}
+          coaching={pendingInsight.coaching}
+          onExpand={() => {
+            if (pendingInsightContext) {
+              setJournalText(pendingInsightContext.text);
+              setEntryTitle(pendingInsightContext.title);
+            }
+            setAiResponse(pendingInsight);
+            setPendingInsight(null);
+            setPendingInsightContext(null);
+            setActiveView("write");
+          }}
+          onDismiss={() => {
+            setPendingInsight(null);
+            setPendingInsightContext(null);
+          }}
         />
       )}
 
