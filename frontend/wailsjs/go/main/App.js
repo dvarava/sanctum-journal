@@ -22,6 +22,14 @@ export function DetectHardware() {
   return window['go']['main']['App']['DetectHardware']();
 }
 
+export function FindSimilarEntries(arg1, arg2, arg3) {
+  return window['go']['main']['App']['FindSimilarEntries'](arg1, arg2, arg3);
+}
+
+export function GenerateEmbedding(arg1) {
+  return window['go']['main']['App']['GenerateEmbedding'](arg1);
+}
+
 export function GetEntries() {
   return window['go']['main']['App']['GetEntries']();
 }

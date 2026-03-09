@@ -1,35 +1,5 @@
 export namespace main {
 	
-	export class AnalysisResult {
-	    emotions: string[];
-	    coaching: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new AnalysisResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.emotions = source["emotions"];
-	        this.coaching = source["coaching"];
-	    }
-	}
-	export class CrisisResult {
-	    is_crisis: boolean;
-	    severity: string;
-	    patterns: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new CrisisResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.is_crisis = source["is_crisis"];
-	        this.severity = source["severity"];
-	        this.patterns = source["patterns"];
-	    }
-	}
 	export class Entry {
 	    id: number;
 	    title: string;
@@ -54,6 +24,57 @@ export namespace main {
 	        this.created_at = source["created_at"];
 	    }
 	}
+	export class AnalysisResult {
+	    emotions: string[];
+	    coaching: string;
+	    similar_entries?: Entry[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AnalysisResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.emotions = source["emotions"];
+	        this.coaching = source["coaching"];
+	        this.similar_entries = this.convertValues(source["similar_entries"], Entry);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class CrisisResult {
+	    is_crisis: boolean;
+	    severity: string;
+	    patterns: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CrisisResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.is_crisis = source["is_crisis"];
+	        this.severity = source["severity"];
+	        this.patterns = source["patterns"];
+	    }
+	}
+	
 	export class HardwareInfo {
 	    os: string;
 	    total_ram_gb: number;

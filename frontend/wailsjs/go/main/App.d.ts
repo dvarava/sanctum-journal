@@ -12,6 +12,10 @@ export function DeleteEntry(arg1:number):Promise<string>;
 
 export function DetectHardware():Promise<main.HardwareInfo>;
 
+export function FindSimilarEntries(arg1:string,arg2:number,arg3:number):Promise<Array<main.Entry>>;
+
+export function GenerateEmbedding(arg1:string):Promise<Array<number>>;
+
 export function GetEntries():Promise<Array<main.Entry>>;
 
 export function GetSettings():Promise<main.Settings>;

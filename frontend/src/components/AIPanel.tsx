@@ -3,6 +3,7 @@ import { Brain, Sparkles, AlertCircle, Heart, MessageCircle } from 'lucide-react
 interface AnalysisResult {
     emotions: string[];
     coaching: string;
+    similar_entries?: any[];
 }
 
 interface AIPanelProps {
@@ -70,6 +71,31 @@ export function AIPanel({ analysis, loading, status, useCloud }: AIPanelProps) {
                                 "{analysis.coaching}"
                             </p>
                         </div>
+
+                        {/* Similar Past Entries */}
+                        {analysis.similar_entries && analysis.similar_entries.length > 0 && (
+                            <div className="p-6 rounded-2xl bg-white/5 border-t border-l border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] backdrop-blur-md">
+                                <div className="flex items-center gap-3 mb-4 border-b border-white/5 pb-3">
+                                    <h3 className="font-semibold text-white tracking-wide text-sm uppercase">Similar Past Entries</h3>
+                                </div>
+                                <div className="space-y-3">
+                                    {analysis.similar_entries.map((entry, i) => (
+                                        <div key={i} className="p-4 bg-black/20 rounded-xl border border-white/5 hover:bg-black/40 transition-colors">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-sm font-medium text-white/90">{entry.title || "Untitled entry"}</span>
+                                                <span className="text-xs text-accent">
+                                                    {entry.created_at ? new Date(entry.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-400 line-clamp-2 leading-relaxed">"{entry.preview}"</p>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-4 text-center">
+                                    These entries were loaded anonymously as context for your AI coach to better understand your emotional patterns over time.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

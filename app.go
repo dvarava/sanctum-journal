@@ -12,11 +12,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -98,6 +100,7 @@ func (a *App) initDB() {
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN title TEXT DEFAULT '';")
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN emotions TEXT DEFAULT '[]';")
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN coaching TEXT DEFAULT '';")
+	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN embedding TEXT DEFAULT '[]';")
 
 	// settings table
 	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS settings (
@@ -209,12 +212,19 @@ func (a *App) SaveEntry(id int, title string, text string, emotions []string, co
 		emotionsJSON = []byte("[]")
 	}
 
+	// generated embedding vector for semantic search
+	embeddingVector := a.GenerateEmbedding(text)
+	embeddingJSON, _ := json.Marshal(embeddingVector)
+	if embeddingJSON == nil || len(embeddingVector) == 0 {
+		embeddingJSON = []byte("[]")
+	}
+
 	if id == 0 {
 		// new entry
-		_, err = a.db.Exec("INSERT INTO entries (title, content, emotions, coaching) VALUES (?, ?, ?, ?)", title, encryptedData, string(emotionsJSON), coaching)
+		_, err = a.db.Exec("INSERT INTO entries (title, content, emotions, coaching, embedding) VALUES (?, ?, ?, ?, ?)", title, encryptedData, string(emotionsJSON), coaching, string(embeddingJSON))
 	} else {
 		// update existing entry
-		_, err = a.db.Exec("UPDATE entries SET title = ?, content = ?, emotions = ?, coaching = ? WHERE id = ?", title, encryptedData, string(emotionsJSON), coaching, id)
+		_, err = a.db.Exec("UPDATE entries SET title = ?, content = ?, emotions = ?, coaching = ?, embedding = ? WHERE id = ?", title, encryptedData, string(emotionsJSON), coaching, string(embeddingJSON), id)
 	}
 
 	if err != nil {
@@ -278,8 +288,9 @@ func (a *App) GetEntries() []Entry {
 }
 
 type AnalysisResult struct {
-	Emotions []string `json:"emotions"`
-	Coaching string   `json:"coaching"`
+	Emotions       []string `json:"emotions"`
+	Coaching       string   `json:"coaching"`
+	SimilarEntries []Entry  `json:"similar_entries,omitempty"`
 }
 
 // Crisis detection
@@ -367,12 +378,24 @@ func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 		depthDirective = "2-3 sentences: a coaching insight, then one concrete actionable suggestion the user can try today."
 	}
 
-	// system prompt with injected style and few-shot examples
+	// fetch RAG context (similar past entries)
+	similarEntries := a.FindSimilarEntries(entryText, 0, 2)
+	ragContext := ""
+	if len(similarEntries) > 0 {
+		ragContext = "\n\nPAST JOURNAL ENTRIES FOR CONTEXT:\n"
+		for _, se := range similarEntries {
+			// strip exact date, keep the text and preview to inform the LLM of past states
+			ragContext += fmt.Sprintf("- Past Entry (%s): %s\n", se.CreatedAt, se.Content)
+		}
+		ragContext += "\nIf relevant, gently weave in a connection to how they handled things in the past."
+	}
+
+	// system prompt with injected style, few-shot examples, and RAG context
 	prompt := fmt.Sprintf(`You are a CBT-informed journaling coach. Analyze this journal entry and respond with JSON.
 
 ENTRY: "%s"
 
-COACHING STYLE: %s
+COACHING STYLE: %s%s
 
 RULES:
 1. Detect the PRIMARY emotional tone of the entry — what the person is FEELING NOW, not words they merely mention.
@@ -396,7 +419,7 @@ Entry: "I failed the exam. I'm so stupid. I'll never get this right."
 Entry: "Had a good day at work but I keep thinking about what my colleague said. Maybe they're right about me."
 {"emotions": ["Anxious", "Reflective"], "coaching": "A good day happened — that's real. One comment doesn't erase it. What evidence contradicts their words?"}
 
-JSON Response:`, entryText, styleDirective, depthDirective)
+JSON Response:`, entryText, styleDirective, ragContext, depthDirective)
 
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"model":  settings.ModelName,
@@ -424,11 +447,13 @@ JSON Response:`, entryText, styleDirective, depthDirective)
 	err = json.Unmarshal([]byte(responseStr), &analysis)
 	if err != nil {
 		return AnalysisResult{
-			Emotions: []string{"Uncertain"},
-			Coaching: responseStr,
+			Emotions:       []string{"Uncertain"},
+			Coaching:       responseStr,
+			SimilarEntries: similarEntries,
 		}
 	}
 
+	analysis.SimilarEntries = similarEntries
 	return analysis
 }
 
@@ -526,4 +551,137 @@ func (a *App) PullModel(modelName string) error {
 		return fmt.Errorf("Ollama API returned status: %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// Local RAG & Vector Search
+func (a *App) GenerateEmbedding(text string) []float64 {
+	// uses nomic-embed-text for fast, high quality local embeddings
+	requestBody, _ := json.Marshal(map[string]interface{}{
+		"model":  "nomic-embed-text",
+		"prompt": text,
+	})
+
+	resp, err := http.Post("http://localhost:11434/api/embeddings", "application/json", bytes.NewBuffer(requestBody))
+
+	// auto-pull embedding model if not installed
+	if err != nil || resp.StatusCode != 200 {
+		_ = a.PullModel("nomic-embed-text")
+		resp, err = http.Post("http://localhost:11434/api/embeddings", "application/json", bytes.NewBuffer(requestBody))
+		if err != nil || resp.StatusCode != 200 {
+			return []float64{}
+		}
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return []float64{}
+	}
+
+	embeddingData, ok := result["embedding"].([]interface{})
+	if !ok {
+		return []float64{}
+	}
+
+	vec := make([]float64, len(embeddingData))
+	for i, v := range embeddingData {
+		vec[i] = v.(float64)
+	}
+	return vec
+}
+
+func cosineSimilarity(a, b []float64) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
+	}
+	var dotProduct, normA, normB float64
+	for i := 0; i < len(a); i++ {
+		dotProduct += a[i] * b[i]
+		normA += a[i] * a[i]
+		normB += b[i] * b[i]
+	}
+	if normA == 0 || normB == 0 {
+		return 0
+	}
+	return dotProduct / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+type scoredEntry struct {
+	entry Entry
+	score float64
+}
+
+func (a *App) FindSimilarEntries(queryText string, currentEntryId int, limit int) []Entry {
+	queryVec := a.GenerateEmbedding(queryText)
+	if len(queryVec) == 0 {
+		return []Entry{}
+	}
+
+	rows, err := a.db.Query("SELECT id, title, content, emotions, coaching, created_at, embedding FROM entries")
+	if err != nil {
+		return []Entry{}
+	}
+	defer rows.Close()
+
+	var scoredEntries []scoredEntry
+
+	for rows.Next() {
+		var id int
+		var title, emotionsJSON, coaching, createdAt, embeddingStr string
+		var encryptedBlob []byte
+
+		if err := rows.Scan(&id, &title, &encryptedBlob, &emotionsJSON, &coaching, &createdAt, &embeddingStr); err != nil {
+			continue
+		}
+
+		// skip the current entry if we are editing it
+		if id == currentEntryId {
+			continue
+		}
+
+		var entryVec []float64
+		if err := json.Unmarshal([]byte(embeddingStr), &entryVec); err != nil || len(entryVec) == 0 {
+			continue
+		}
+
+		score := cosineSimilarity(queryVec, entryVec)
+
+		// arbitrary threshold for "similar"
+		if score > 0.6 {
+			decrypted, _ := a.decrypt(encryptedBlob)
+
+			preview := decrypted
+			if len(preview) > 150 {
+				preview = preview[:150] + "..."
+			}
+
+			var emotions []string
+			_ = json.Unmarshal([]byte(emotionsJSON), &emotions)
+
+			scoredEntries = append(scoredEntries, scoredEntry{
+				score: score,
+				entry: Entry{
+					ID:        id,
+					Title:     title,
+					Content:   decrypted,
+					Preview:   preview,
+					Emotions:  emotions,
+					Coaching:  coaching,
+					CreatedAt: createdAt,
+				},
+			})
+		}
+	}
+
+	// sort by highest similarity score
+	sort.Slice(scoredEntries, func(i, j int) bool {
+		return scoredEntries[i].score > scoredEntries[j].score
+	})
+
+	var results []Entry
+	for i := 0; i < len(scoredEntries) && i < limit; i++ {
+		results = append(results, scoredEntries[i].entry)
+	}
+
+	return results
 }
