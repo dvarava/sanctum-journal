@@ -54,11 +54,28 @@ export namespace main {
 	        this.created_at = source["created_at"];
 	    }
 	}
+	export class HardwareInfo {
+	    os: string;
+	    total_ram_gb: number;
+	    recommended_model: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new HardwareInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.os = source["os"];
+	        this.total_ram_gb = source["total_ram_gb"];
+	        this.recommended_model = source["recommended_model"];
+	    }
+	}
 	export class Settings {
 	    coaching_style: string;
 	    analysis_depth: string;
 	    model_name: string;
 	    user_name: string;
+	    onboarding_complete: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -70,6 +87,7 @@ export namespace main {
 	        this.analysis_depth = source["analysis_depth"];
 	        this.model_name = source["model_name"];
 	        this.user_name = source["user_name"];
+	        this.onboarding_complete = source["onboarding_complete"];
 	    }
 	}
 

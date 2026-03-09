@@ -18,6 +18,10 @@ export function DeleteEntry(arg1) {
   return window['go']['main']['App']['DeleteEntry'](arg1);
 }
 
+export function DetectHardware() {
+  return window['go']['main']['App']['DetectHardware']();
+}
+
 export function GetEntries() {
   return window['go']['main']['App']['GetEntries']();
 }
@@ -26,10 +30,22 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
+export function IsOllamaRunning() {
+  return window['go']['main']['App']['IsOllamaRunning']();
+}
+
+export function ListModels() {
+  return window['go']['main']['App']['ListModels']();
+}
+
+export function PullModel(arg1) {
+  return window['go']['main']['App']['PullModel'](arg1);
+}
+
 export function SaveEntry(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['SaveEntry'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function SaveSettings(arg1, arg2, arg3, arg4) {
-  return window['go']['main']['App']['SaveSettings'](arg1, arg2, arg3, arg4);
+export function SaveSettings(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['SaveSettings'](arg1, arg2, arg3, arg4, arg5);
 }

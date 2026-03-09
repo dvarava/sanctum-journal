@@ -61,7 +61,7 @@ export function Settings() {
     }, []);
 
     const handleSave = async () => {
-        await SaveSettings(coachingStyle, analysisDepth, modelName, userName);
+        await SaveSettings(coachingStyle, analysisDepth, modelName, userName, true);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
     };

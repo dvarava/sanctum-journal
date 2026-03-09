@@ -11,10 +11,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -50,10 +54,11 @@ type Entry struct {
 }
 
 type Settings struct {
-	CoachingStyle string `json:"coaching_style"` // compassionate, direct, socratic, motivational
-	AnalysisDepth string `json:"analysis_depth"` // brief, detailed
-	ModelName     string `json:"model_name"`     // ollama model to use
-	UserName      string `json:"user_name"`      // for personalised greeting
+	CoachingStyle      string `json:"coaching_style"` // compassionate, direct, socratic, motivational
+	AnalysisDepth      string `json:"analysis_depth"` // brief, detailed
+	ModelName          string `json:"model_name"`     // ollama model to use
+	UserName           string `json:"user_name"`      // for personalised greeting
+	OnboardingComplete bool   `json:"onboarding_complete"`
 }
 
 // initialize the local SQLite database
@@ -100,55 +105,53 @@ func (a *App) initDB() {
 		coaching_style TEXT DEFAULT 'compassionate',
 		analysis_depth TEXT DEFAULT 'brief',
 		model_name TEXT DEFAULT 'gemma:2b',
-		user_name TEXT DEFAULT ''
+		user_name TEXT DEFAULT '',
+		onboarding_complete BOOLEAN DEFAULT 0
 	);`)
 	if err != nil {
-		fmt.Println("Error creating settings table:", err)
+		log.Fatalf("Error creating settings table: %v\n", err)
 	}
 	// ensure defaults row exists
 	_, _ = a.db.Exec(`INSERT OR IGNORE INTO settings (id) VALUES (1);`)
 
 	// migrations for existing DBs
 	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN user_name TEXT DEFAULT '';")
+	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0;")
 
 	fmt.Println("Database initialized at:", dbPath)
 }
 
 // settings methods
 func (a *App) GetSettings() Settings {
-	defaults := Settings{
-		CoachingStyle: "compassionate",
-		AnalysisDepth: "brief",
-		ModelName:     "gemma:2b",
-		UserName:      "",
-	}
-
-	if a.db == nil {
-		return defaults
-	}
-
-	row := a.db.QueryRow("SELECT coaching_style, analysis_depth, model_name, user_name FROM settings WHERE id = 1")
 	var s Settings
-	err := row.Scan(&s.CoachingStyle, &s.AnalysisDepth, &s.ModelName, &s.UserName)
+	if a.db == nil {
+		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", OnboardingComplete: false}
+	}
+
+	err := a.db.QueryRow("SELECT coaching_style, analysis_depth, model_name, user_name, onboarding_complete FROM settings WHERE id = 1").
+		Scan(&s.CoachingStyle, &s.AnalysisDepth, &s.ModelName, &s.UserName, &s.OnboardingComplete)
 	if err != nil {
-		return defaults
+		// return defaults if row doesn't exist yet
+		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", OnboardingComplete: false}
 	}
 	return s
 }
 
-func (a *App) SaveSettings(coachingStyle, analysisDepth, modelName, userName string) string {
+func (a *App) SaveSettings(style, depth, model, username string, onboardingComplete bool) string {
 	if a.db == nil {
 		return "Database not initialized"
 	}
 
-	_, err := a.db.Exec(
-		"UPDATE settings SET coaching_style = ?, analysis_depth = ?, model_name = ?, user_name = ? WHERE id = 1",
-		coachingStyle, analysisDepth, modelName, userName,
-	)
+	_, err := a.db.Exec(`
+		UPDATE settings 
+		SET coaching_style = ?, analysis_depth = ?, model_name = ?, user_name = ?, onboarding_complete = ?
+		WHERE id = 1`,
+		style, depth, model, username, onboardingComplete)
+
 	if err != nil {
 		return "Error saving settings: " + err.Error()
 	}
-	return "Settings saved."
+	return "Settings saved securely."
 }
 
 // encryption helpers
@@ -436,4 +439,91 @@ func (a *App) AnalyzeJournalCloud(entryText string, apiKey string) AnalysisResul
 		Emotions: []string{"Cloud-Analyzed", "Insightful"},
 		Coaching: "This is a cloud-powered insight (Simulated). Your thought patterns suggest a need for rest. Try the '5-4-3-2-1' grounding technique.",
 	}
+}
+
+// Onboarding & Hardware Detection
+type HardwareInfo struct {
+	OS          string `json:"os"`
+	TotalRAMGB  int    `json:"total_ram_gb"`
+	Recommended string `json:"recommended_model"`
+}
+
+// macOS specific hardware detection using sysctl
+func (a *App) DetectHardware() HardwareInfo {
+	info := HardwareInfo{
+		OS:          "macOS", // macOS only for now
+		TotalRAMGB:  8,       // fallback
+		Recommended: "qwen3:4b",
+	}
+
+	// try reading memory size via sysctl (macOS specific)
+	out, err := exec.Command("sysctl", "-n", "hw.memsize").Output()
+	if err == nil {
+		memBytes, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err == nil {
+			info.TotalRAMGB = int(memBytes / (1024 * 1024 * 1024))
+		}
+	}
+
+	// simple recommendation logic based on RAM
+	if info.TotalRAMGB < 8 {
+		info.Recommended = "qwen3:1.7b"
+	} else if info.TotalRAMGB >= 16 {
+		info.Recommended = "qwen3:8b"
+	} else {
+		info.Recommended = "qwen3:4b" // 8GB-15GB sweet spot
+	}
+
+	return info
+}
+
+func (a *App) IsOllamaRunning() bool {
+	resp, err := http.Get("http://localhost:11434/")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
+}
+
+func (a *App) ListModels() []string {
+	resp, err := http.Get("http://localhost:11434/api/tags")
+	if err != nil {
+		return []string{}
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return []string{}
+	}
+
+	models := make([]string, len(result.Models))
+	for i, m := range result.Models {
+		models[i] = m.Name
+	}
+	return models
+}
+
+func (a *App) PullModel(modelName string) error {
+	requestBody, _ := json.Marshal(map[string]interface{}{
+		"name":   modelName,
+		"stream": false, // blocking call so frontend knows when it's done
+	})
+
+	resp, err := http.Post("http://localhost:11434/api/pull", "application/json", bytes.NewBuffer(requestBody))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("Ollama API returned status: %d", resp.StatusCode)
+	}
+	return nil
 }

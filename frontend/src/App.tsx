@@ -10,6 +10,7 @@ import { MoodLineChart } from "./components/MoodLineChart";
 import { CrisisScreen } from "./components/CrisisScreen";
 import { Settings } from "./components/Settings";
 import { InsightToast } from "./components/InsightToast";
+import { Onboarding } from "./components/Onboarding";
 
 interface AnalysisResult {
   emotions: string[];
@@ -30,6 +31,7 @@ function App() {
   const [aiResponse, setAiResponse] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiStatus, setAiStatus] = useState("");
+  const [isOnboarding, setIsOnboarding] = useState(false);
 
   // auto-coaching insight
   const [pendingInsight, setPendingInsight] = useState<AnalysisResult | null>(null);
@@ -49,13 +51,16 @@ function App() {
   // load history + settings on mount and when navigating views
   useEffect(() => {
     refreshHistory();
-    loadDisplayName();
+    loadDisplayNameAndOnboarding();
   }, [activeView]);
 
-  const loadDisplayName = async () => {
+  const loadDisplayNameAndOnboarding = async () => {
     try {
       const s = await GetSettings();
       setDisplayName(s.user_name || "");
+      if (s.onboarding_complete === false) {
+        setIsOnboarding(true);
+      }
     } catch { }
   };
 
@@ -200,6 +205,15 @@ function App() {
 
   // render the active view
   const renderContent = () => {
+    if (isOnboarding) {
+      return (
+        <Onboarding onComplete={() => {
+          setIsOnboarding(false);
+          setActiveView("home");
+        }} />
+      );
+    }
+
     switch (activeView) {
       case "write":
         return (
