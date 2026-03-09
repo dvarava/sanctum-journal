@@ -30,10 +30,12 @@ const coachingStyles = [
 ];
 
 const availableModels = [
-    { id: 'gemma:2b', label: 'Gemma 2B', description: 'Fast, lightweight (recommended)' },
-    { id: 'gemma:7b', label: 'Gemma 7B', description: 'More capable, needs 8GB+ RAM' },
-    { id: 'mistral', label: 'Mistral 7B', description: 'Strong reasoning, needs 8GB+ RAM' },
-    { id: 'llama2', label: 'Llama 2', description: 'Meta open-source, general purpose' },
+    { id: 'qwen3:4b', label: 'Qwen3 4B', description: 'Best balance of quality and speed (recommended, ~4GB RAM)' },
+    { id: 'qwen3:1.7b', label: 'Qwen3 1.7B', description: 'Fast and lightweight (~2GB RAM)' },
+    { id: 'qwen3:30b-a3b', label: 'Qwen3 30B MoE', description: 'Near cloud-quality, 30B knowledge in ~4GB RAM' },
+    { id: 'qwen3:8b', label: 'Qwen3 8B', description: 'Strong reasoning, needs 8GB+ free RAM' },
+    { id: 'gemma:2b', label: 'Gemma 2B', description: 'Legacy — fast but lower quality (~2GB RAM)' },
+    { id: 'mistral', label: 'Mistral 7B', description: 'Strong reasoning, needs 8GB+ free RAM' },
 ];
 
 export function Settings() {
@@ -106,8 +108,8 @@ export function Settings() {
                             key={style.id}
                             onClick={() => setCoachingStyle(style.id)}
                             className={`p-4 rounded-xl text-left transition-all border ${coachingStyle === style.id
-                                    ? 'bg-accent/10 border-accent/40 shadow-[0_0_15px_rgba(45,212,191,0.15)]'
-                                    : 'bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20'
+                                ? 'bg-accent/10 border-accent/40 shadow-[0_0_15px_rgba(45,212,191,0.15)]'
+                                : 'bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20'
                                 }`}
                         >
                             <div className="flex items-center gap-2 mb-1">
@@ -132,8 +134,8 @@ export function Settings() {
                     <button
                         onClick={() => setAnalysisDepth('brief')}
                         className={`flex-1 p-4 rounded-xl text-left transition-all border ${analysisDepth === 'brief'
-                                ? 'bg-accent/10 border-accent/40'
-                                : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
+                            ? 'bg-accent/10 border-accent/40'
+                            : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
                             }`}
                     >
                         <span className={`font-medium text-sm ${analysisDepth === 'brief' ? 'text-accent' : 'text-white/90'}`}>Brief</span>
@@ -142,8 +144,8 @@ export function Settings() {
                     <button
                         onClick={() => setAnalysisDepth('detailed')}
                         className={`flex-1 p-4 rounded-xl text-left transition-all border ${analysisDepth === 'detailed'
-                                ? 'bg-accent/10 border-accent/40'
-                                : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
+                            ? 'bg-accent/10 border-accent/40'
+                            : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
                             }`}
                     >
                         <span className={`font-medium text-sm ${analysisDepth === 'detailed' ? 'text-accent' : 'text-white/90'}`}>Detailed</span>
@@ -164,8 +166,8 @@ export function Settings() {
                             key={model.id}
                             onClick={() => setModelName(model.id)}
                             className={`flex items-center justify-between p-3 rounded-xl transition-all border ${modelName === model.id
-                                    ? 'bg-accent/10 border-accent/40'
-                                    : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
+                                ? 'bg-accent/10 border-accent/40'
+                                : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
                                 }`}
                         >
                             <div>
@@ -228,8 +230,8 @@ export function Settings() {
             <button
                 onClick={handleSave}
                 className={`w-full py-3 rounded-xl font-medium text-sm transition-all ${saved
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                        : 'bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    : 'bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20'
                     }`}
             >
                 {saved ? '✓ Saved' : 'Save Settings'}

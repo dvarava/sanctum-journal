@@ -36,6 +36,7 @@ export namespace main {
 	    content: string;
 	    preview: string;
 	    emotions: string[];
+	    coaching: string;
 	    created_at: string;
 	
 	    static createFrom(source: any = {}) {
@@ -49,6 +50,7 @@ export namespace main {
 	        this.content = source["content"];
 	        this.preview = source["preview"];
 	        this.emotions = source["emotions"];
+	        this.coaching = source["coaching"];
 	        this.created_at = source["created_at"];
 	    }
 	}

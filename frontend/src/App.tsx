@@ -113,7 +113,7 @@ function App() {
     // pass detected emotions if available
     const emotionsToSave = aiResponse?.emotions || [];
 
-    await SaveEntry(currentEntryId, entryTitle, journalText, emotionsToSave);
+    await SaveEntry(currentEntryId, entryTitle, journalText, emotionsToSave, aiResponse?.coaching || "");
     await refreshHistory();
 
     // reset editor for new entry
@@ -191,7 +191,7 @@ function App() {
     setEntryTitle(entry.title);
     setJournalText(entry.content);
     if (entry.emotions && entry.emotions.length > 0) {
-      setAiResponse({ emotions: entry.emotions, coaching: "Analysis from history." });
+      setAiResponse({ emotions: entry.emotions, coaching: entry.coaching || "" });
     } else {
       setAiResponse(null);
     }

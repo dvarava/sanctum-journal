@@ -45,6 +45,7 @@ type Entry struct {
 	Content   string   `json:"content"`
 	Preview   string   `json:"preview"`
 	Emotions  []string `json:"emotions"`
+	Coaching  string   `json:"coaching"`
 	CreatedAt string   `json:"created_at"`
 }
 
@@ -91,6 +92,7 @@ func (a *App) initDB() {
 	// for existing DBs
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN title TEXT DEFAULT '';")
 	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN emotions TEXT DEFAULT '[]';")
+	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN coaching TEXT DEFAULT '';")
 
 	// settings table
 	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS settings (
@@ -188,7 +190,7 @@ func (a *App) decrypt(ciphertext []byte) (string, error) {
 }
 
 // exposed methods for frontend
-func (a *App) SaveEntry(id int, title string, text string, emotions []string) string {
+func (a *App) SaveEntry(id int, title string, text string, emotions []string, coaching string) string {
 	encryptedData, err := a.encrypt(text)
 	if err != nil {
 		return "Error encrypting data: " + err.Error()
@@ -206,10 +208,10 @@ func (a *App) SaveEntry(id int, title string, text string, emotions []string) st
 
 	if id == 0 {
 		// new entry
-		_, err = a.db.Exec("INSERT INTO entries (title, content, emotions) VALUES (?, ?, ?)", title, encryptedData, string(emotionsJSON))
+		_, err = a.db.Exec("INSERT INTO entries (title, content, emotions, coaching) VALUES (?, ?, ?, ?)", title, encryptedData, string(emotionsJSON), coaching)
 	} else {
 		// update existing entry
-		_, err = a.db.Exec("UPDATE entries SET title = ?, content = ?, emotions = ? WHERE id = ?", title, encryptedData, string(emotionsJSON), id)
+		_, err = a.db.Exec("UPDATE entries SET title = ?, content = ?, emotions = ?, coaching = ? WHERE id = ?", title, encryptedData, string(emotionsJSON), coaching, id)
 	}
 
 	if err != nil {
@@ -227,7 +229,7 @@ func (a *App) DeleteEntry(id int) string {
 }
 
 func (a *App) GetEntries() []Entry {
-	rows, err := a.db.Query("SELECT id, title, content, emotions, created_at FROM entries ORDER BY id DESC")
+	rows, err := a.db.Query("SELECT id, title, content, emotions, coaching, created_at FROM entries ORDER BY id DESC")
 	if err != nil {
 		return []Entry{}
 	}
@@ -239,9 +241,10 @@ func (a *App) GetEntries() []Entry {
 		var title string
 		var encryptedBlob []byte
 		var emotionsJSON string
+		var coaching string
 		var createdAt string
 
-		err := rows.Scan(&id, &title, &encryptedBlob, &emotionsJSON, &createdAt)
+		err := rows.Scan(&id, &title, &encryptedBlob, &emotionsJSON, &coaching, &createdAt)
 		if err != nil {
 			fmt.Println("Scan error:", err)
 			continue
@@ -264,6 +267,7 @@ func (a *App) GetEntries() []Entry {
 			Content:   decrypted,
 			Preview:   preview,
 			Emotions:  emotions,
+			Coaching:  coaching,
 			CreatedAt: createdAt,
 		})
 	}
@@ -355,28 +359,39 @@ func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	}
 
 	// coaching depth
-	depthDirective := "A single, punchy cognitive reframe (MAX 15 WORDS)."
+	depthDirective := "One sentence (MAX 20 WORDS). No filler."
 	if settings.AnalysisDepth == "detailed" {
-		depthDirective = "A thoughtful 2-3 sentence coaching response with a cognitive reframe and one actionable suggestion."
+		depthDirective = "2-3 sentences: a coaching insight, then one concrete actionable suggestion the user can try today."
 	}
 
-	// system prompt with injected style
-	prompt := fmt.Sprintf(`You are a supportive journaling coach. Analyze this journal entry: "%s"
+	// system prompt with injected style and few-shot examples
+	prompt := fmt.Sprintf(`You are a CBT-informed journaling coach. Analyze this journal entry and respond with JSON.
+
+ENTRY: "%s"
 
 COACHING STYLE: %s
 
-IMPORTANT RULES:
-- You are NOT a therapist or medical professional.
-- Never diagnose conditions or prescribe treatments.
-- Focus on cognitive reframing and self-reflection.
-- If the entry mentions professional help, encourage it.
+RULES:
+1. Detect the PRIMARY emotional tone of the entry — what the person is FEELING NOW, not words they merely mention.
+2. If the entry is POSITIVE (celebrating, grateful, proud), reinforce the behaviour. Do NOT reframe positive entries.
+3. If the entry is NEGATIVE (distorted thinking, rumination, self-criticism), provide a gentle cognitive reframe.
+4. If MIXED, acknowledge the positive and gently address the negative.
+5. You are NOT a therapist. Never diagnose. Never prescribe. If they mention professional help, encourage it.
 
-Return a JSON object with:
-1. "emotions": Array of 1-3 detected emotions.
-2. "coaching": %s
+RESPOND WITH JSON:
+- "emotions": Array of 1-3 emotions the person is currently feeling (NOT keywords they mention).
+- "coaching": %s
 
-Example:
-{"emotions": ["Anxious"], "coaching": "Your productivity does not define your worth."}
+EXAMPLES:
+
+Entry: "I was walking today for 3 hours and I feel amazing. I need to walk more, especially when anxious."
+{"emotions": ["Proud", "Energised"], "coaching": "Walking is a powerful coping tool — you've found something that genuinely works for you."}
+
+Entry: "I failed the exam. I'm so stupid. I'll never get this right."
+{"emotions": ["Frustrated", "Self-Critical"], "coaching": "One exam doesn't define your ability — what would you say to a friend in this situation?"}
+
+Entry: "Had a good day at work but I keep thinking about what my colleague said. Maybe they're right about me."
+{"emotions": ["Anxious", "Reflective"], "coaching": "A good day happened — that's real. One comment doesn't erase it. What evidence contradicts their words?"}
 
 JSON Response:`, entryText, styleDirective, depthDirective)
 
