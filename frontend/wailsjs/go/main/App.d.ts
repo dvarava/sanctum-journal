@@ -28,4 +28,4 @@ export function PullModel(arg1:string):Promise<void>;
 
 export function SaveEntry(arg1:number,arg2:string,arg3:string,arg4:Array<string>,arg5:string):Promise<string>;
 
-export function SaveSettings(arg1:string,arg2:string,arg3:string,arg4:string,arg5:boolean):Promise<string>;
+export function SaveSettings(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean):Promise<string>;

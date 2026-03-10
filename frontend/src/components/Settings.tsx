@@ -38,10 +38,16 @@ const availableModels = [
     { id: 'mistral', label: 'Mistral 7B', description: 'Strong reasoning, needs 8GB+ free RAM' },
 ];
 
+const emoModels = [
+    { id: 'default', label: 'Use Base Model', description: 'Use the model selected above for both coaching and emotions' },
+    { id: 'emollm:7b', label: 'EmoLLM 7B', description: 'Specialized at emotion classification (requires an extra ~4GB RAM peak)' },
+];
+
 export function Settings() {
     const [coachingStyle, setCoachingStyle] = useState('compassionate');
     const [analysisDepth, setAnalysisDepth] = useState('brief');
     const [modelName, setModelName] = useState('gemma:2b');
+    const [emotionModel, setEmotionModel] = useState('default');
     const [userName, setUserName] = useState('');
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -54,6 +60,7 @@ export function Settings() {
                 setCoachingStyle(s.coaching_style || 'compassionate');
                 setAnalysisDepth(s.analysis_depth || 'brief');
                 setModelName(s.model_name || 'gemma:2b');
+                setEmotionModel(s.emotion_model || 'default');
                 setUserName(s.user_name || '');
             } catch { }
             setLoading(false);
@@ -61,7 +68,7 @@ export function Settings() {
     }, []);
 
     const handleSave = async () => {
-        await SaveSettings(coachingStyle, analysisDepth, modelName, userName, true);
+        await SaveSettings(coachingStyle, analysisDepth, modelName, emotionModel, userName, true);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
     };
@@ -183,6 +190,40 @@ export function Settings() {
                 <p className="text-[10px] text-gray-500 mt-2">
                     Model must be installed via Ollama. Run: <code className="text-gray-400">ollama pull {modelName}</code>
                 </p>
+            </section>
+
+            {/* Emotion Model Selector */}
+            <section className="mb-8 p-5 rounded-2xl bg-white/[0.02] border border-white/5 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+
+                <div className="flex items-center gap-2 mb-3 relative">
+                    <Brain size={16} className="text-blue-400" />
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300">Emotion Model (EmoLLM)</h3>
+                </div>
+                <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+                    Research shows specialized EmoLLMs drastically outperform general models in emotion classification. Enable this to route emotion parsing to a dedicated model while coaching stays with your primary model above.
+                </p>
+
+                <div className="flex flex-col gap-2 relative">
+                    {emoModels.map((model) => (
+                        <button
+                            key={model.id}
+                            onClick={() => setEmotionModel(model.id)}
+                            className={`flex items-center justify-between p-3 rounded-xl transition-all border ${emotionModel === model.id
+                                ? 'bg-blue-500/10 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
+                                : 'bg-black/20 border-white/5 hover:bg-white/[0.04]'
+                                }`}
+                        >
+                            <div className="text-left flex flex-col justify-center">
+                                <span className={`font-mono text-sm ${emotionModel === model.id ? 'text-blue-300' : 'text-gray-300'}`}>
+                                    {model.label}
+                                </span>
+                                <span className="text-[10px] text-gray-500 mt-0.5">{model.description}</span>
+                            </div>
+                            {emotionModel === model.id && <Check size={16} className="text-blue-400" />}
+                        </button>
+                    ))}
+                </div>
             </section>
 
             {/* Privacy Info */}

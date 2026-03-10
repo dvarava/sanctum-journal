@@ -59,6 +59,7 @@ type Settings struct {
 	CoachingStyle      string `json:"coaching_style"` // compassionate, direct, socratic, motivational
 	AnalysisDepth      string `json:"analysis_depth"` // brief, detailed
 	ModelName          string `json:"model_name"`     // ollama model to use
+	EmotionModel       string `json:"emotion_model"`  // ollama model to use for emotion analysis
 	UserName           string `json:"user_name"`      // for personalised greeting
 	OnboardingComplete bool   `json:"onboarding_complete"`
 }
@@ -107,7 +108,8 @@ func (a *App) initDB() {
 		id INTEGER PRIMARY KEY CHECK (id = 1),
 		coaching_style TEXT DEFAULT 'compassionate',
 		analysis_depth TEXT DEFAULT 'brief',
-		model_name TEXT DEFAULT 'gemma:2b',
+		model_name TEXT DEFAULT 'qwen3:4b',
+		emotion_model TEXT DEFAULT 'default',
 		user_name TEXT DEFAULT '',
 		onboarding_complete BOOLEAN DEFAULT 0
 	);`)
@@ -120,6 +122,7 @@ func (a *App) initDB() {
 	// migrations for existing DBs
 	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN user_name TEXT DEFAULT '';")
 	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0;")
+	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN emotion_model TEXT DEFAULT 'default';")
 
 	fmt.Println("Database initialized at:", dbPath)
 }
@@ -128,28 +131,28 @@ func (a *App) initDB() {
 func (a *App) GetSettings() Settings {
 	var s Settings
 	if a.db == nil {
-		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", OnboardingComplete: false}
+		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", EmotionModel: "default", OnboardingComplete: false}
 	}
 
-	err := a.db.QueryRow("SELECT coaching_style, analysis_depth, model_name, user_name, onboarding_complete FROM settings WHERE id = 1").
-		Scan(&s.CoachingStyle, &s.AnalysisDepth, &s.ModelName, &s.UserName, &s.OnboardingComplete)
+	err := a.db.QueryRow("SELECT coaching_style, analysis_depth, model_name, emotion_model, user_name, onboarding_complete FROM settings WHERE id = 1").
+		Scan(&s.CoachingStyle, &s.AnalysisDepth, &s.ModelName, &s.EmotionModel, &s.UserName, &s.OnboardingComplete)
 	if err != nil {
 		// return defaults if row doesn't exist yet
-		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", OnboardingComplete: false}
+		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", EmotionModel: "default", OnboardingComplete: false}
 	}
 	return s
 }
 
-func (a *App) SaveSettings(style, depth, model, username string, onboardingComplete bool) string {
+func (a *App) SaveSettings(style, depth, model, emotionModel, username string, onboardingComplete bool) string {
 	if a.db == nil {
 		return "Database not initialized"
 	}
 
 	_, err := a.db.Exec(`
 		UPDATE settings 
-		SET coaching_style = ?, analysis_depth = ?, model_name = ?, user_name = ?, onboarding_complete = ?
-		WHERE id = 1`,
-		style, depth, model, username, onboardingComplete)
+		SET coaching_style = ?, analysis_depth = ?, model_name = ?, emotion_model = ?, user_name = ?, onboarding_complete = ?
+		WHERE id = 1
+	`, style, depth, model, emotionModel, username, onboardingComplete)
 
 	if err != nil {
 		return "Error saving settings: " + err.Error()
@@ -391,6 +394,10 @@ func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	}
 
 	// system prompt with injected style, few-shot examples, and RAG context
+	// if using a specialized EmoLLM, optionally override the 'emotions' field later
+	isDualModel := settings.EmotionModel != "default" && settings.EmotionModel != ""
+
+	// base coaching prompt
 	prompt := fmt.Sprintf(`You are a CBT-informed journaling coach. Analyze this journal entry and respond with JSON.
 
 ENTRY: "%s"
@@ -454,6 +461,38 @@ JSON Response:`, entryText, styleDirective, ragContext, depthDirective)
 	}
 
 	analysis.SimilarEntries = similarEntries
+
+	// If dual-model is active, invoke EmoLLM to override the general model's emotion array
+	if isDualModel {
+		emoPrompt := fmt.Sprintf(`You are an expert emotion analysis system. Read this journal entry and return ONLY a JSON array of 1 to 3 primary emotions the author is currently feeling. No explanation.
+		
+		ENTRY: "%s"
+		
+		RESPOND STRICTLY IN THIS FORMAT:
+		{"emotions": ["Emotion1", "Emotion2"]}
+		`, entryText)
+
+		emoReqBody, _ := json.Marshal(map[string]interface{}{
+			"model":  settings.EmotionModel,
+			"prompt": emoPrompt,
+			"stream": false,
+			"format": "json",
+		})
+
+		emoResp, err := http.Post(url, "application/json", bytes.NewBuffer(emoReqBody))
+		if err == nil {
+			defer emoResp.Body.Close()
+			var emoResult map[string]interface{}
+			_ = json.NewDecoder(emoResp.Body).Decode(&emoResult)
+			if emoResponseStr, ok := emoResult["response"].(string); ok {
+				var emoAnalysis AnalysisResult
+				if err := json.Unmarshal([]byte(emoResponseStr), &emoAnalysis); err == nil && len(emoAnalysis.Emotions) > 0 {
+					analysis.Emotions = emoAnalysis.Emotions
+				}
+			}
+		}
+	}
+
 	return analysis
 }
 

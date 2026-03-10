@@ -95,6 +95,7 @@ export namespace main {
 	    coaching_style: string;
 	    analysis_depth: string;
 	    model_name: string;
+	    emotion_model: string;
 	    user_name: string;
 	    onboarding_complete: boolean;
 	
@@ -107,6 +108,7 @@ export namespace main {
 	        this.coaching_style = source["coaching_style"];
 	        this.analysis_depth = source["analysis_depth"];
 	        this.model_name = source["model_name"];
+	        this.emotion_model = source["emotion_model"];
 	        this.user_name = source["user_name"];
 	        this.onboarding_complete = source["onboarding_complete"];
 	    }

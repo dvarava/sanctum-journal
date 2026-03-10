@@ -54,6 +54,6 @@ export function SaveEntry(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['SaveEntry'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function SaveSettings(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['SaveSettings'](arg1, arg2, arg3, arg4, arg5);
+export function SaveSettings(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['SaveSettings'](arg1, arg2, arg3, arg4, arg5, arg6);
 }

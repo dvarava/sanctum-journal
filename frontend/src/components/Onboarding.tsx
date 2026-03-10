@@ -65,6 +65,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 currentSettings.coaching_style,
                 currentSettings.analysis_depth,
                 hwInfo?.recommended_model || currentSettings.model_name,
+                currentSettings.emotion_model || 'default',
                 currentSettings.user_name,
                 true // flag complete
             );
@@ -157,8 +158,8 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                             onClick={handleInstallModel}
                             disabled={isPulling}
                             className={`w-full py-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-3 border ${isPulling
-                                    ? "bg-white/5 border-white/10 text-gray-400 cursor-not-allowed"
-                                    : "bg-accent/20 text-accent border-accent/30 hover:bg-accent/30"
+                                ? "bg-white/5 border-white/10 text-gray-400 cursor-not-allowed"
+                                : "bg-accent/20 text-accent border-accent/30 hover:bg-accent/30"
                                 }`}
                         >
                             {isPulling ? (
