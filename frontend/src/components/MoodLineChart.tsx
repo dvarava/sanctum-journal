@@ -1,4 +1,4 @@
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { main } from "../../wailsjs/go/models";
 
 interface MoodLineChartProps {
@@ -6,8 +6,6 @@ interface MoodLineChartProps {
 }
 
 export function MoodLineChart({ entries }: MoodLineChartProps) {
-    // Helper to map emotion tags to an approximate "Valence/Energy" score (1-10)
-    // This is a prototype heuristic.
     const getMoodScore = (emotions: string[]): number | null => {
         if (!emotions || emotions.length === 0) return null;
 
@@ -41,43 +39,80 @@ export function MoodLineChart({ entries }: MoodLineChartProps) {
             date: new Date(entry.created_at).toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' }),
             score: getMoodScore(entry.emotions)
         }));
+    const scoredData = data.filter((entry) => typeof entry.score === "number");
+    const averageScore = scoredData.length > 0
+        ? scoredData.reduce((sum, entry) => sum + (entry.score || 0), 0) / scoredData.length
+        : null;
+    const moodLabel = averageScore === null ? "Waiting" : averageScore >= 7 ? "Lighter" : averageScore >= 4 ? "Steady" : "Heavy";
 
     return (
-        <div className="bg-surface/30 rounded-2xl border border-white/5 p-6 animate-in fade-in duration-700 w-full max-w-md mx-auto flex flex-col h-full cursor-default select-none outline-none ring-0">
-            <h3 className="text-lg font-serif text-white/90 mb-4 text-center">Emotional Trends (Last 30)</h3>
-
-            <div className="flex-1 w-full min-h-[160px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={data} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                        <XAxis
-                            dataKey="date"
-                            hide
-                        />
-                        <YAxis
-                            domain={[0, 10]}
-                            width={30}
-                            tick={false}
-                            axisLine={false}
-                            label={{ value: 'Positivity', angle: -90, position: 'insideLeft', style: { fill: '#6b7280', fontSize: 10, textAnchor: 'middle' } }}
-                        />
-                        <Tooltip
-                            contentStyle={{ backgroundColor: '#1e293b', borderColor: 'rgba(255,255,255,0.1)', color: '#f3f4f6' }}
-                            itemStyle={{ color: '#2dd4bf' }}
-                            formatter={(value: any) => [value?.toFixed(1) || "0.0", "Mood Score"]}
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="score"
-                            stroke="#2dd4bf"
-                            strokeWidth={3}
-                            connectNulls={true}
-                            isAnimationActive={false}
-                            dot={{ fill: '#0f172a', stroke: '#2dd4bf', strokeWidth: 2, r: 4 }}
-                            activeDot={{ r: 6, fill: '#2dd4bf' }}
-                        />
-                    </LineChart>
-                </ResponsiveContainer>
+        <div className="app-panel rounded-[28px] p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <p className="eyebrow">Trend</p>
+                    <h3 className="section-title mt-2 text-[1.65rem]">Emotional tone</h3>
+                </div>
+                <div className="pill-chip">
+                    <span className="text-sm font-semibold text-[var(--accent-strong)]">{moodLabel}</span>
+                </div>
             </div>
+
+            {scoredData.length === 0 ? (
+                <div className="mt-5 flex min-h-[250px] items-center justify-center rounded-[24px] border border-dashed border-[var(--line)] bg-[rgba(255,255,255,0.42)] px-6 text-center">
+                    <p className="max-w-xs text-sm leading-7 text-[var(--muted)]">No data yet.</p>
+                </div>
+            ) : (
+                <div className="mt-5 flex flex-col gap-4">
+                    <div className="flex flex-wrap gap-3">
+                        <div className="pill-chip">
+                            Avg {averageScore?.toFixed(1)}
+                        </div>
+                        <div className="pill-chip">
+                            {scoredData.length} entries
+                        </div>
+                    </div>
+
+                    <div className="h-[250px] w-full rounded-[24px] bg-[rgba(255,255,255,0.48)] p-3">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={data} margin={{ top: 12, right: 8, left: -14, bottom: 0 }}>
+                                <CartesianGrid vertical={false} stroke="rgba(79,96,82,0.1)" />
+                                <XAxis
+                                    dataKey="date"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tick={{ fill: "#778377", fontSize: 11 }}
+                                />
+                                <YAxis
+                                    domain={[0, 10]}
+                                    width={30}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tick={{ fill: "#778377", fontSize: 11 }}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: "rgba(255, 255, 255, 0.94)",
+                                        borderColor: "rgba(79,96,82,0.14)",
+                                        borderRadius: "16px",
+                                        boxShadow: "0 16px 30px rgba(63,78,66,0.12)",
+                                    }}
+                                    itemStyle={{ color: "#425347" }}
+                                    formatter={(value) => [typeof value === "number" ? value.toFixed(1) : "0.0", "Mood score"]}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="score"
+                                    stroke="#5d7563"
+                                    strokeWidth={3}
+                                    connectNulls={true}
+                                    dot={false}
+                                    activeDot={{ r: 5, fill: "#415247", stroke: "#f8f5ef", strokeWidth: 2 }}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

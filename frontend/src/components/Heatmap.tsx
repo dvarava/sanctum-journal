@@ -5,34 +5,25 @@ interface HeatmapProps {
 }
 
 export function Heatmap({ entries }: HeatmapProps) {
-    // generate last 28 days (4 weeks) for the grid
     const days = Array.from({ length: 28 }, (_, i) => {
         const d = new Date();
         d.setDate(d.getDate() - (27 - i));
         return d;
     });
 
-    // map entries to date strings (YYYY-MM-DD)
     const activeDates = new Set(entries.map(e => {
         return new Date(e.created_at).toISOString().split('T')[0];
     }));
 
-    // calculate current streak
     const calculateStreak = () => {
-        const sortedDates = [...activeDates].sort().reverse();
-        if (sortedDates.length === 0) return 0;
-
         const today = new Date().toISOString().split('T')[0];
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
 
-        // if no entry today or yesterday, streak is lost (0)
         if (!activeDates.has(today) && !activeDates.has(yesterday)) {
             return 0;
         }
 
         let streak = 0;
-        let currentDate = new Date();
-
         let checkDate = activeDates.has(today) ? new Date() : new Date(Date.now() - 86400000);
 
         while (true) {
@@ -48,41 +39,55 @@ export function Heatmap({ entries }: HeatmapProps) {
     };
 
     const streak = calculateStreak();
+    const activeCount = days.filter((date) => activeDates.has(date.toISOString().split("T")[0])).length;
 
     return (
-        <div className="bg-surface/30 rounded-2xl border border-white/5 p-6 animate-in fade-in duration-700 w-full max-w-md mx-auto">
-            <h3 className="text-lg font-serif text-white/90 mb-4 text-center">Consistency</h3>
+        <div className="app-panel rounded-[28px] p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <p className="eyebrow">Streak</p>
+                    <h3 className="section-title mt-2 text-[1.65rem]">Consistency</h3>
+                </div>
+                <div className="pill-chip">
+                    <span className="text-sm font-semibold text-[var(--accent-strong)]">
+                        {streak} day{streak !== 1 ? "s" : ""}
+                    </span>
+                </div>
+            </div>
 
-            <div className="grid grid-cols-7 gap-2">
+            <div className="mt-5 grid grid-cols-7 gap-2.5">
                 {days.map((date, i) => {
-                    const dateStr = date.toISOString().split('T')[0];
+                    const dateStr = date.toISOString().split("T")[0];
                     const isActive = activeDates.has(dateStr);
 
                     return (
                         <div
                             key={i}
                             title={date.toDateString()}
-                            className={`
-                                aspect-square rounded-md border transition-all duration-300
-                                ${isActive
-                                    ? 'bg-accent/20 border-accent/50 shadow-[0_0_10px_rgba(45,212,191,0.2)]'
-                                    : 'bg-white/5 border-white/5'
-                                }
-                                flex items-center justify-center
-                            `}
+                            className={`aspect-square rounded-[0.95rem] border transition-all duration-200 ${
+                                isActive
+                                    ? "border-[rgba(93,117,99,0.16)] bg-[rgba(93,117,99,0.72)] shadow-[0_10px_22px_rgba(65,82,71,0.14)]"
+                                    : "border-[rgba(79,96,82,0.1)] bg-[rgba(255,255,255,0.52)]"
+                            } flex items-center justify-center`}
                         >
-                            {isActive && (
-                                <span className="text-accent text-xs">×</span>
-                            )}
+                            <span
+                                className={`h-2.5 w-2.5 rounded-full ${
+                                    isActive ? "bg-white/90" : "bg-[rgba(93,117,99,0.16)]"
+                                }`}
+                            />
                         </div>
                     );
                 })}
             </div>
 
-            <div className="mt-4 text-center">
-                <p className="text-xs text-accent font-mono uppercase tracking-widest">
-                    Current Streak: <span className="font-bold text-lg">{streak}</span> Day{streak !== 1 ? 's' : ''}
+            <div className="mt-5 flex items-center justify-between gap-4 text-sm">
+                <p className="text-[var(--muted)]">
+                    {activeCount} / 28 days
                 </p>
+                <div className="flex items-center gap-2 text-[var(--muted)]">
+                    <span className="h-2.5 w-2.5 rounded-full bg-[rgba(93,117,99,0.72)]" />
+                    Written
+                </div>
             </div>
         </div>
     );

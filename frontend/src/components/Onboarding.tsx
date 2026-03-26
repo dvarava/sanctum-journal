@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { DetectHardware, IsOllamaRunning, ListModels, PullModel, GetSettings, SaveSettings } from "../../wailsjs/go/main/App";
-import { Cpu, ShieldCheck, Download, CheckCircle, AlertTriangle, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, ArrowRight, CheckCircle, Cpu, Download, ShieldCheck } from "lucide-react";
+import { DetectHardware, GetSettings, IsOllamaRunning, ListModels, PullModel, SaveSettings } from "../../wailsjs/go/main/App";
 import { main } from "../../wailsjs/go/models";
 
 interface OnboardingProps {
@@ -32,6 +32,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 console.error("Setup check failed", e);
             }
         };
+
         checkSystem();
     }, []);
 
@@ -43,13 +44,12 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         try {
             await PullModel(hwInfo.recommended_model);
 
-            // Validate it installed by listing again
             const models = await ListModels();
-            if (models && models.includes(hwInfo.recommended_model + ":latest")) {
+            if (models && models.includes(`${hwInfo.recommended_model}:latest`)) {
                 setInstalledModels(models);
-                setStep(3); // success
+                setStep(3);
             } else {
-                setPullError("Installation finished but model not found in list. Please try again or install manually.");
+                setPullError("Installation finished but the model was not found afterward. Please try again or install it manually.");
             }
         } catch (e: any) {
             setPullError(e.message || "Failed to download model.");
@@ -65,9 +65,9 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 currentSettings.coaching_style,
                 currentSettings.analysis_depth,
                 hwInfo?.recommended_model || currentSettings.model_name,
-                currentSettings.emotion_model || 'default',
+                currentSettings.emotion_model || "default",
                 currentSettings.user_name,
-                true // flag complete
+                true
             );
         } catch (e) {
             console.error("Failed saving settings", e);
@@ -75,126 +75,129 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         onComplete();
     };
 
-    // Wizard Step 1: Welcome & Value Prop
     if (step === 1) {
         return (
-            <div className="flex flex-col items-center justify-center p-12 max-w-2xl mx-auto h-full text-center animate-in fade-in zoom-in-95 duration-700">
-                <div className="w-16 h-16 bg-accent/20 rounded-2xl flex items-center justify-center mb-8 shadow-[0_0_30px_rgba(45,212,191,0.2)]">
-                    <ShieldCheck size={32} className="text-accent" />
-                </div>
-                <h1 className="text-4xl font-serif text-white/95 mb-4 leading-tight">Your Private Space. <br />Your Personal Coach.</h1>
-                <p className="text-lg text-gray-400 font-light mb-12 max-w-lg leading-relaxed">
-                    Sanctum uses advanced local AI to analyse your entries and provide cognitive reframes — completely offline. Your thoughts never leave your device.
-                </p>
-                <button
-                    onClick={() => setStep(2)}
-                    className="flex items-center gap-3 px-8 py-4 bg-white text-slate-900 font-semibold rounded-full hover:bg-accent hover:text-white transition-all shadow-[0_0_20px_rgba(45,212,191,0.2)] group"
-                >
-                    Setup Intelligence
-                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                </button>
+            <div className="page-shell enter-soft">
+                <section className="app-panel-strong mx-auto flex max-w-4xl flex-col items-center rounded-[36px] px-6 py-12 text-center sm:px-10 sm:py-16">
+                    <div className="icon-badge h-20 w-20 rounded-[1.8rem]">
+                        <ShieldCheck size={34} />
+                    </div>
+                    <p className="eyebrow mt-6">Welcome to Sanctum</p>
+                    <h1 className="page-title mt-4 max-w-3xl">Your private space, with a calmer way to reflect</h1>
+                    <button onClick={() => setStep(2)} className="action-primary mt-10">
+                        Setup intelligence
+                        <ArrowRight size={18} />
+                    </button>
+                </section>
             </div>
         );
     }
 
-    // Wizard Step 2: Hardware Check & Model Selection
     if (step === 2) {
-        const hasRecommended = installedModels.some(m => m.startsWith(hwInfo?.recommended_model || ""));
+        const hasRecommended = installedModels.some((model) => model.startsWith(hwInfo?.recommended_model || ""));
 
         return (
-            <div className="flex flex-col p-12 max-w-2xl mx-auto h-full animate-in slide-in-from-right-8 duration-500">
-                <h2 className="text-2xl font-serif text-white/90 mb-2">Configuring AI for your Mac</h2>
-                <p className="text-gray-400 mb-8 border-b border-white/5 pb-8">We've scanned your hardware to recommend the most optimal model.</p>
-
-                {hwInfo && (
-                    <div className="bg-white/5 border border-white/10 p-6 rounded-2xl mb-8 flex items-start gap-4">
-                        <Cpu className="text-accent mt-1" size={24} />
+            <div className="page-shell enter-soft">
+                <section className="app-panel-strong mx-auto max-w-4xl rounded-[36px] p-6 sm:p-8">
+                    <div className="flex flex-col gap-8">
                         <div>
-                            <h3 className="text-lg font-medium text-white/90 mb-1">System Profile</h3>
-                            <p className="text-sm text-gray-400 mb-4">{hwInfo.os} • {hwInfo.total_ram_gb}GB Memory</p>
+                            <p className="eyebrow">Setup</p>
+                            <h2 className="page-title mt-3">Configuring local AI for your device</h2>
+                        </div>
 
-                            <div className="bg-black/20 p-4 rounded-xl border border-white/5">
-                                <span className="text-xs uppercase tracking-wider text-accent/80 font-bold mb-1 block">Recommended Model</span>
-                                <span className="text-lg font-mono text-white/90">{hwInfo.recommended_model}</span>
-                                <p className="text-xs text-gray-500 mt-2">
-                                    {hwInfo.total_ram_gb < 8 ? "Optimised for low memory systems." : "The best balance of deep reasoning and speed for your hardware."}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {!ollamaRunning ? (
-                    <div className="bg-red-500/10 border border-red-500/20 p-6 rounded-2xl flex items-start gap-4">
-                        <AlertTriangle className="text-red-400 shrink-0" size={24} />
-                        <div>
-                            <h3 className="text-white/90 font-medium mb-1">Ollama is not running</h3>
-                            <p className="text-sm text-red-200/70 mb-4">You must install and run the Ollama app before continuing.</p>
-                            <a href="https://ollama.com/download" target="_blank" rel="noreferrer" className="text-xs px-4 py-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors">
-                                Download Ollama
-                            </a>
-                        </div>
-                    </div>
-                ) : hasRecommended ? (
-                    <div className="text-center mt-4">
-                        <div className="inline-flex items-center gap-2 mb-6 text-emerald-400 bg-emerald-400/10 px-4 py-2 rounded-full text-sm font-medium">
-                            <CheckCircle size={16} /> Model ready
-                        </div>
-                        <button
-                            onClick={() => setStep(3)}
-                            className="w-full py-4 bg-accent/20 text-accent font-semibold rounded-xl hover:bg-accent/30 transition-all border border-accent/30"
-                        >
-                            Continue
-                        </button>
-                    </div>
-                ) : (
-                    <div>
-                        {pullError && (
-                            <div className="mb-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-200 text-sm">
-                                {pullError}
+                        {hwInfo && (
+                            <div className="app-panel rounded-[28px] p-5 sm:p-6">
+                                <div className="flex items-start gap-4">
+                                    <span className="icon-badge h-12 w-12 rounded-[1rem]">
+                                        <Cpu size={20} />
+                                    </span>
+                                    <div className="flex-1">
+                                        <p className="eyebrow">System Profile</p>
+                                        <h3 className="mt-2 text-xl font-semibold text-[var(--text)]">
+                                            {hwInfo.os} • {hwInfo.total_ram_gb}GB memory
+                                        </h3>
+                                        <div className="app-panel-muted mt-4 rounded-[24px] p-4">
+                                            <p className="eyebrow">Recommended Model</p>
+                                            <p className="mt-2 font-mono text-base font-semibold text-[var(--text)]">
+                                                {hwInfo.recommended_model}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
-                        <button
-                            onClick={handleInstallModel}
-                            disabled={isPulling}
-                            className={`w-full py-4 font-semibold rounded-xl transition-all flex items-center justify-center gap-3 border ${isPulling
-                                ? "bg-white/5 border-white/10 text-gray-400 cursor-not-allowed"
-                                : "bg-accent/20 text-accent border-accent/30 hover:bg-accent/30"
-                                }`}
-                        >
-                            {isPulling ? (
-                                <>
-                                    <div className="animate-spin w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full" />
-                                    Downloading Model (this may take a while)...
-                                </>
-                            ) : (
-                                <>
-                                    <Download size={18} />
-                                    Download & Install Model
-                                </>
-                            )}
-                        </button>
-                        <p className="text-center text-xs text-gray-500 mt-4">Requires approx. {hwInfo?.total_ram_gb && hwInfo.total_ram_gb < 8 ? "1.5GB" : "3GB"} of disk space.</p>
+
+                        {!ollamaRunning ? (
+                            <div className="rounded-[28px] border border-[rgba(177,95,78,0.22)] bg-[rgba(245,225,221,0.86)] p-5 sm:p-6">
+                                <div className="flex items-start gap-4">
+                                    <AlertTriangle className="mt-1 shrink-0 text-[#9a5d4d]" size={22} />
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-[#7b4e42]">Ollama is not running</h3>
+                                        <a
+                                            href="https://ollama.com/download"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="action-secondary mt-5 inline-flex"
+                                        >
+                                            Download Ollama
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : hasRecommended ? (
+                            <div className="flex flex-col gap-4">
+                                <div className="pill-chip w-fit bg-[rgba(238,244,238,0.92)] text-[var(--accent-strong)]">
+                                    <CheckCircle size={14} />
+                                    Recommended model is ready
+                                </div>
+                                <button onClick={() => setStep(3)} className="action-primary w-full justify-center">
+                                    Continue
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-4">
+                                {pullError && (
+                                    <div className="rounded-[24px] border border-[rgba(177,95,78,0.22)] bg-[rgba(245,225,221,0.86)] p-4 text-sm leading-7 text-[#8a5f42]">
+                                        {pullError}
+                                    </div>
+                                )}
+                                <button
+                                    onClick={handleInstallModel}
+                                    disabled={isPulling}
+                                    className={isPulling ? "action-secondary w-full justify-center" : "action-primary w-full justify-center"}
+                                >
+                                    {isPulling ? (
+                                        <>
+                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+                                            Downloading model...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Download size={18} />
+                                            Download and install model
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        )}
                     </div>
-                )}
+                </section>
             </div>
         );
     }
 
-    // Wizard Step 3: Success
     return (
-        <div className="flex flex-col items-center justify-center p-12 max-w-2xl mx-auto h-full text-center animate-in zoom-in-95 duration-500">
-            <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mb-8 border border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.2)]">
-                <CheckCircle size={40} className="text-emerald-400" />
-            </div>
-            <h2 className="text-3xl font-serif text-white/95 mb-4">Sanctum is Ready</h2>
-            <p className="text-gray-400 mb-10 max-w-md">Your AI intelligence is configured and running completely locally securely.</p>
-            <button
-                onClick={finishOnboarding}
-                className="px-10 py-4 bg-white text-slate-900 font-bold rounded-full hover:bg-emerald-400 transition-colors shadow-lg"
-            >
-                Start Journaling
-            </button>
+        <div className="page-shell enter-soft">
+            <section className="app-panel-strong mx-auto flex max-w-3xl flex-col items-center rounded-[36px] px-6 py-14 text-center sm:px-10">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[rgba(93,117,99,0.18)] bg-[rgba(238,244,238,0.92)] shadow-[0_24px_40px_rgba(65,82,71,0.12)]">
+                    <CheckCircle size={38} className="text-[var(--accent-strong)]" />
+                </div>
+                <p className="eyebrow mt-6">Ready</p>
+                <h2 className="page-title mt-4">Sanctum is set up</h2>
+                <button onClick={finishOnboarding} className="action-primary mt-10">
+                    Start journaling
+                </button>
+            </section>
         </div>
     );
 }

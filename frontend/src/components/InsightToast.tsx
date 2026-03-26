@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Sparkles, X, ChevronRight } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { ChevronRight, Sparkles, X } from "lucide-react";
 
 interface InsightToastProps {
     emotions: string[];
@@ -39,14 +39,13 @@ export function InsightToast({ emotions, coaching, onExpand, onDismiss }: Insigh
                     : 'opacity-0 translate-y-4 pointer-events-none'
                 }`}
         >
-            <div className="bg-[#1a1a2e]/95 backdrop-blur-xl border border-accent/20 rounded-2xl p-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)] shadow-accent/5">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-2">
+            <div className="app-panel-strong rounded-[26px] p-4 shadow-[0_24px_40px_rgba(63,78,66,0.16)]">
+                <div className="mb-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center">
-                            <Sparkles size={12} className="text-accent" />
+                        <div className="icon-badge h-8 w-8 rounded-[0.9rem]">
+                            <Sparkles size={14} />
                         </div>
-                        <span className="text-xs font-semibold uppercase tracking-wider text-accent/80">
+                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-strong)]">
                             Auto Insight
                         </span>
                     </div>
@@ -55,19 +54,18 @@ export function InsightToast({ emotions, coaching, onExpand, onDismiss }: Insigh
                             setIsVisible(false);
                             setTimeout(onDismiss, 300);
                         }}
-                        className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--muted)] transition-colors hover:bg-[rgba(255,255,255,0.72)] hover:text-[var(--text)]"
                     >
-                        <X size={12} className="text-gray-500" />
+                        <X size={13} />
                     </button>
                 </div>
 
-                {/* Emotion chips */}
                 {emotions.length > 0 && (
-                    <div className="flex gap-1.5 mb-2 flex-wrap">
+                    <div className="mb-3 flex flex-wrap gap-1.5">
                         {emotions.map((e, i) => (
                             <span
                                 key={i}
-                                className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent/90 border border-accent/20"
+                                className="rounded-full border border-[rgba(93,117,99,0.14)] bg-[rgba(238,244,238,0.82)] px-2.5 py-1 text-[10px] text-[var(--accent-strong)]"
                             >
                                 {e}
                             </span>
@@ -75,15 +73,13 @@ export function InsightToast({ emotions, coaching, onExpand, onDismiss }: Insigh
                     </div>
                 )}
 
-                {/* Coaching preview */}
-                <p className="text-sm text-white/80 leading-relaxed line-clamp-2 mb-3">
+                <p className="mb-3 text-sm leading-7 text-[var(--muted-strong)] line-clamp-2">
                     {coaching}
                 </p>
 
-                {/* Expand action */}
                 <button
                     onClick={handleExpand}
-                    className="flex items-center gap-1 text-xs text-accent/70 hover:text-accent transition-colors group"
+                    className="group flex items-center gap-1 text-xs font-semibold tracking-wide text-[var(--accent-strong)] transition-colors hover:text-[var(--text)]"
                 >
                     <span>View full insight</span>
                     <ChevronRight size={12} className="group-hover:translate-x-0.5 transition-transform" />

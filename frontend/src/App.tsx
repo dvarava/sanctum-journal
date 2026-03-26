@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Calendar, History as HistoryIcon, PenTool, ShieldCheck } from "lucide-react";
 import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries, DeleteEntry, CheckCrisisMarkers, GetSettings } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 import { Layout } from "./components/Layout";
@@ -16,6 +17,13 @@ interface AnalysisResult {
   emotions: string[];
   coaching: string;
 }
+
+const getEntriesThisWeek = (entries: main.Entry[]) => {
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 6);
+
+  return entries.filter((entry) => new Date(entry.created_at) >= weekAgo).length;
+};
 
 function App() {
   const [activeView, setActiveView] = useState("write");
@@ -239,28 +247,96 @@ function App() {
         const hour = new Date().getHours();
         const timeGreeting = hour < 12 ? "Good Morning" : hour < 18 ? "Good Afternoon" : "Good Evening";
         const greeting = displayName ? `${timeGreeting}, ${displayName}.` : `${timeGreeting}.`;
+        const recentEntries = history.slice(0, 3);
+        const entriesThisWeek = getEntriesThisWeek(history);
+
         return (
-          <div className="flex flex-col items-center justify-center h-full gap-8 p-8 animate-in fade-in duration-700">
-            <div className="text-center">
-              <h2 className="text-3xl font-serif text-white/90 mb-2">{greeting}</h2>
-              <p className="text-gray-400 font-light">What's on your mind today?</p>
-            </div>
+          <div className="page-shell enter-soft">
+            <section className="app-panel-strong rounded-[32px] p-6 sm:p-8 lg:p-10">
+              <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_300px]">
+                <div className="flex flex-col gap-6">
+                  <div className="space-y-5">
+                    <p className="eyebrow">Daily Reflection</p>
+                    <h2 className="page-title max-w-3xl">{greeting}</h2>
 
-            <div className="flex flex-wrap items-stretch justify-center gap-6 w-full max-w-5xl">
-              <div className="flex-1 min-w-[300px]">
-                <Heatmap entries={history} />
-              </div>
-              <div className="flex-1 min-w-[300px]">
-                <MoodLineChart entries={history} />
-              </div>
-            </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button onClick={() => setActiveView("write")} className="action-primary">
+                        <PenTool size={16} />
+                        Start writing
+                      </button>
+                      <button onClick={() => setActiveView("history")} className="action-secondary">
+                        <HistoryIcon size={16} />
+                        Browse history
+                      </button>
+                    </div>
+                  </div>
 
-            <button
-              onClick={() => setActiveView("write")}
-              className="px-8 py-3 bg-white text-slate-900 font-semibold rounded-full hover:bg-accent/90 transition-all shadow-[0_0_20px_rgba(45,212,191,0.3)]"
-            >
-              Start Writing
-            </button>
+                  <div className="flex flex-wrap gap-3">
+                    <div className="metric-card">
+                      <span className="metric-label">Entries</span>
+                      <span className="metric-value">{history.length}</span>
+                    </div>
+                    <div className="metric-card">
+                      <span className="metric-label">This Week</span>
+                      <span className="metric-value">{entriesThisWeek}</span>
+                    </div>
+                    <div className="pill-chip bg-[rgba(255,255,255,0.62)]">
+                      <ShieldCheck size={14} className="text-[var(--accent-strong)]" />
+                      Local-first
+                    </div>
+                  </div>
+
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    <Heatmap entries={history} />
+                    <MoodLineChart entries={history} />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="app-panel rounded-[28px] p-5 sm:p-6">
+                    <div className="flex items-start gap-3">
+                      <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                        <Calendar size={18} />
+                      </span>
+                      <div>
+                        <h3 className="mt-2 text-xl font-semibold text-[var(--text)]">Recent Entries</h3>
+                      </div>
+                    </div>
+
+                    {recentEntries.length > 0 ? (
+                      <div className="mt-5 space-y-3">
+                        {recentEntries.map((entry) => (
+                          <button
+                            key={entry.id}
+                            onClick={() => handleSelectEntry(entry)}
+                            className="w-full rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.58)] p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-[rgba(255,255,255,0.82)]"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="truncate text-sm font-semibold text-[var(--text)]">
+                                {entry.title || "Untitled entry"}
+                              </span>
+                              <span className="text-xs text-[var(--muted)]">
+                                {new Date(entry.created_at).toLocaleDateString(undefined, {
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </span>
+                            </div>
+                            <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--muted)]">
+                              {entry.preview || "Open entry"}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-5 rounded-[22px] border border-dashed border-[var(--line)] bg-[rgba(255,255,255,0.42)] p-5">
+                        <p className="text-sm leading-7 text-[var(--muted)]">No entries yet.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         );
       case "settings":
@@ -323,4 +399,3 @@ function App() {
 }
 
 export default App;
-

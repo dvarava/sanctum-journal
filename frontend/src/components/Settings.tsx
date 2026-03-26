@@ -6,41 +6,41 @@ const coachingStyles = [
     {
         id: 'compassionate',
         label: 'Compassionate',
-        description: 'Warm, empathetic, validates feelings before reframing',
+        description: 'Warm and validating',
         emoji: '💛',
     },
     {
         id: 'direct',
         label: 'Direct',
-        description: 'Concise, honest, actionable insight without sugar-coating',
+        description: 'Clear and concise',
         emoji: '🎯',
     },
     {
         id: 'socratic',
         label: 'Socratic',
-        description: 'Thought-provoking questions that help you discover your own insight',
+        description: 'Question-led',
         emoji: '🧠',
     },
     {
         id: 'motivational',
         label: 'Motivational',
-        description: 'Energising, uplifting, focused on strengths and growth',
+        description: 'Upbeat and energising',
         emoji: '🔥',
     },
 ];
 
 const availableModels = [
-    { id: 'qwen3:4b', label: 'Qwen3 4B', description: 'Best balance of quality and speed (recommended, ~4GB RAM)' },
-    { id: 'qwen3:1.7b', label: 'Qwen3 1.7B', description: 'Fast and lightweight (~2GB RAM)' },
-    { id: 'qwen3:30b-a3b', label: 'Qwen3 30B MoE', description: 'Near cloud-quality, 30B knowledge in ~4GB RAM' },
-    { id: 'qwen3:8b', label: 'Qwen3 8B', description: 'Strong reasoning, needs 8GB+ free RAM' },
-    { id: 'gemma:2b', label: 'Gemma 2B', description: 'Legacy — fast but lower quality (~2GB RAM)' },
-    { id: 'mistral', label: 'Mistral 7B', description: 'Strong reasoning, needs 8GB+ free RAM' },
+    { id: 'qwen3:4b', label: 'Qwen3 4B', description: 'Balanced' },
+    { id: 'qwen3:1.7b', label: 'Qwen3 1.7B', description: 'Lightweight' },
+    { id: 'qwen3:30b-a3b', label: 'Qwen3 30B MoE', description: 'Largest local option' },
+    { id: 'qwen3:8b', label: 'Qwen3 8B', description: 'Higher quality' },
+    { id: 'gemma:2b', label: 'Gemma 2B', description: 'Fastest legacy option' },
+    { id: 'mistral', label: 'Mistral 7B', description: 'Strong general model' },
 ];
 
 const emoModels = [
-    { id: 'default', label: 'Use Base Model', description: 'Use the model selected above for both coaching and emotions' },
-    { id: 'emollm:7b', label: 'EmoLLM 7B', description: 'Specialized at emotion classification (requires an extra ~4GB RAM peak)' },
+    { id: 'default', label: 'Use Base Model', description: 'Single model' },
+    { id: 'emollm:7b', label: 'EmoLLM 7B', description: 'Emotion-specific' },
 ];
 
 export function Settings() {
@@ -75,208 +75,266 @@ export function Settings() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center h-full">
-                <div className="animate-spin w-6 h-6 border-2 border-accent border-t-transparent rounded-full" />
+            <div className="page-shell">
+                <div className="app-panel-strong flex min-h-[260px] items-center justify-center rounded-[32px]">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="p-8 max-w-2xl mx-auto animate-in fade-in duration-500 overflow-y-auto h-full">
-            <div className="flex items-center gap-3 mb-8">
-                <SettingsIcon size={24} className="text-accent" />
-                <h2 className="text-2xl font-serif text-white/90">Settings</h2>
-            </div>
-
-            {/* User Name */}
-            <section className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                    <User size={16} className="text-gray-400" />
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Your Name</h3>
-                </div>
-                <input
-                    type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    placeholder="Enter your name for personalised greetings"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 outline-none focus:border-accent/50 transition-colors"
-                />
-            </section>
-
-            {/* Coaching Style */}
-            <section className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                    <Brain size={16} className="text-gray-400" />
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Coaching Style</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                    {coachingStyles.map((style) => (
-                        <button
-                            key={style.id}
-                            onClick={() => setCoachingStyle(style.id)}
-                            className={`p-4 rounded-xl text-left transition-all border ${coachingStyle === style.id
-                                ? 'bg-accent/10 border-accent/40 shadow-[0_0_15px_rgba(45,212,191,0.15)]'
-                                : 'bg-white/5 border-white/10 hover:bg-white/[0.07] hover:border-white/20'
-                                }`}
-                        >
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-lg">{style.emoji}</span>
-                                <span className={`font-medium text-sm ${coachingStyle === style.id ? 'text-accent' : 'text-white/90'}`}>
-                                    {style.label}
-                                </span>
+        <div className="page-shell enter-soft">
+            <div className="flex flex-col gap-6">
+                <section className="app-panel-strong rounded-[32px] p-6 sm:p-8">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="flex items-start gap-4">
+                            <span className="icon-badge h-14 w-14 rounded-[1.4rem]">
+                                <SettingsIcon size={24} />
+                            </span>
+                            <div className="max-w-2xl">
+                                <p className="eyebrow">Preferences</p>
+                                <h2 className="page-title mt-3">Shape the tone of your journal</h2>
                             </div>
-                            <p className="text-xs text-gray-400 leading-relaxed">{style.description}</p>
-                        </button>
-                    ))}
-                </div>
-            </section>
-
-            {/* Analysis Depth */}
-            <section className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                    <Gauge size={16} className="text-gray-400" />
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Analysis Depth</h3>
-                </div>
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => setAnalysisDepth('brief')}
-                        className={`flex-1 p-4 rounded-xl text-left transition-all border ${analysisDepth === 'brief'
-                            ? 'bg-accent/10 border-accent/40'
-                            : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
-                            }`}
-                    >
-                        <span className={`font-medium text-sm ${analysisDepth === 'brief' ? 'text-accent' : 'text-white/90'}`}>Brief</span>
-                        <p className="text-xs text-gray-400 mt-1">One-line cognitive reframe</p>
-                    </button>
-                    <button
-                        onClick={() => setAnalysisDepth('detailed')}
-                        className={`flex-1 p-4 rounded-xl text-left transition-all border ${analysisDepth === 'detailed'
-                            ? 'bg-accent/10 border-accent/40'
-                            : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
-                            }`}
-                    >
-                        <span className={`font-medium text-sm ${analysisDepth === 'detailed' ? 'text-accent' : 'text-white/90'}`}>Detailed</span>
-                        <p className="text-xs text-gray-400 mt-1">Multi-sentence coaching with suggestions</p>
-                    </button>
-                </div>
-            </section>
-
-            {/* Model Selector */}
-            <section className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                    <Cpu size={16} className="text-gray-400" />
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">AI Model</h3>
-                </div>
-                <div className="flex flex-col gap-2">
-                    {availableModels.map((model) => (
-                        <button
-                            key={model.id}
-                            onClick={() => setModelName(model.id)}
-                            className={`flex items-center justify-between p-3 rounded-xl transition-all border ${modelName === model.id
-                                ? 'bg-accent/10 border-accent/40'
-                                : 'bg-white/5 border-white/10 hover:bg-white/[0.07]'
-                                }`}
-                        >
-                            <div>
-                                <span className={`font-mono text-sm ${modelName === model.id ? 'text-accent' : 'text-white/90'}`}>
-                                    {model.label}
-                                </span>
-                                <p className="text-xs text-gray-500">{model.description}</p>
-                            </div>
-                            {modelName === model.id && <Check size={16} className="text-accent" />}
-                        </button>
-                    ))}
-                </div>
-                <p className="text-[10px] text-gray-500 mt-2">
-                    Model must be installed via Ollama. Run: <code className="text-gray-400">ollama pull {modelName}</code>
-                </p>
-            </section>
-
-            {/* Emotion Model Selector */}
-            <section className="mb-8 p-5 rounded-2xl bg-white/[0.02] border border-white/5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-
-                <div className="flex items-center gap-2 mb-3 relative">
-                    <Brain size={16} className="text-blue-400" />
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-300">Emotion Model (EmoLLM)</h3>
-                </div>
-                <p className="text-xs text-gray-400 mb-4 leading-relaxed">
-                    Research shows specialized EmoLLMs drastically outperform general models in emotion classification. Enable this to route emotion parsing to a dedicated model while coaching stays with your primary model above.
-                </p>
-
-                <div className="flex flex-col gap-2 relative">
-                    {emoModels.map((model) => (
-                        <button
-                            key={model.id}
-                            onClick={() => setEmotionModel(model.id)}
-                            className={`flex items-center justify-between p-3 rounded-xl transition-all border ${emotionModel === model.id
-                                ? 'bg-blue-500/10 border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
-                                : 'bg-black/20 border-white/5 hover:bg-white/[0.04]'
-                                }`}
-                        >
-                            <div className="text-left flex flex-col justify-center">
-                                <span className={`font-mono text-sm ${emotionModel === model.id ? 'text-blue-300' : 'text-gray-300'}`}>
-                                    {model.label}
-                                </span>
-                                <span className="text-[10px] text-gray-500 mt-0.5">{model.description}</span>
-                            </div>
-                            {emotionModel === model.id && <Check size={16} className="text-blue-400" />}
-                        </button>
-                    ))}
-                </div>
-            </section>
-
-            {/* Privacy Info */}
-            <section className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                    <Shield size={16} className="text-gray-400" />
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">Privacy</h3>
-                </div>
-                <div className="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                    <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                            <Shield size={14} className="text-emerald-400" />
                         </div>
-                        <div>
-                            <p className="text-sm text-emerald-200 font-medium">All data stays on your device</p>
-                            <ul className="text-xs text-gray-400 mt-2 space-y-1">
-                                <li className="flex items-center gap-2">
-                                    <Check size={10} className="text-emerald-500 shrink-0" />
-                                    Entries encrypted with AES-256-GCM
-                                </li>
-                                <li className="flex items-center gap-2">
-                                    <Check size={10} className="text-emerald-500 shrink-0" />
-                                    AI analysis runs locally via Ollama
-                                </li>
-                                <li className="flex items-center gap-2">
-                                    <Check size={10} className="text-emerald-500 shrink-0" />
-                                    No telemetry, no external API calls
-                                </li>
-                                <li className="flex items-center gap-2">
-                                    <FolderOpen size={10} className="text-emerald-500 shrink-0" />
-                                    Database location: ~/Library/Application Support/Sanctum/
-                                </li>
-                            </ul>
-                        </div>
+
+                        <button onClick={handleSave} className={saved ? "action-secondary" : "action-primary"}>
+                            {saved ? "Settings saved" : "Save settings"}
+                        </button>
                     </div>
+                </section>
+
+                <div className="grid gap-6 xl:grid-cols-2">
+                    <section className="app-panel rounded-[30px] p-6">
+                        <div className="flex items-center gap-3">
+                            <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                                <User size={18} />
+                            </span>
+                            <div>
+                                <p className="eyebrow">Profile</p>
+                                <h3 className="text-xl font-semibold text-[var(--text)]">Personal details</h3>
+                            </div>
+                        </div>
+
+                        <div className="mt-5">
+                            <label className="eyebrow">Display Name</label>
+                            <input
+                                type="text"
+                                value={userName}
+                                onChange={(e) => setUserName(e.target.value)}
+                                placeholder="Enter your name for personalized greetings"
+                                className="soft-input mt-2"
+                            />
+                        </div>
+
+                        <div className="mt-8">
+                            <div className="flex items-center gap-3">
+                                <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                                    <Brain size={18} />
+                                </span>
+                                <div>
+                                    <p className="eyebrow">Coaching Style</p>
+                                </div>
+                            </div>
+
+                            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                                {coachingStyles.map((style) => (
+                                    <button
+                                        key={style.id}
+                                        onClick={() => setCoachingStyle(style.id)}
+                                        className={`rounded-[24px] border p-4 text-left transition-all ${
+                                            coachingStyle === style.id
+                                                ? "border-[rgba(93,117,99,0.26)] bg-[rgba(238,244,238,0.92)] shadow-[0_16px_30px_rgba(65,82,71,0.08)]"
+                                                : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
+                                        }`}
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-semibold text-[var(--text)]">{style.label}</p>
+                                                <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
+                                                    {style.description}
+                                                </p>
+                                            </div>
+                                            {coachingStyle === style.id && (
+                                                <Check size={16} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
+                                            )}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="app-panel rounded-[30px] p-6">
+                            <div className="flex items-center gap-3">
+                                <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                                    <Gauge size={18} />
+                                </span>
+                                <div>
+                                    <p className="eyebrow">Analysis</p>
+                                    <h3 className="text-xl font-semibold text-[var(--text)]">Depth</h3>
+                                </div>
+                            </div>
+
+                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                            <button
+                                onClick={() => setAnalysisDepth("brief")}
+                                className={`rounded-[24px] border p-4 text-left transition-all ${
+                                    analysisDepth === "brief"
+                                        ? "border-[rgba(93,117,99,0.26)] bg-[rgba(238,244,238,0.92)] shadow-[0_16px_30px_rgba(65,82,71,0.08)]"
+                                        : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
+                                }`}
+                            >
+                                <p className="text-sm font-semibold text-[var(--text)]">Brief</p>
+                                <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
+                                    One concise cognitive reframe.
+                                </p>
+                            </button>
+
+                            <button
+                                onClick={() => setAnalysisDepth("detailed")}
+                                className={`rounded-[24px] border p-4 text-left transition-all ${
+                                    analysisDepth === "detailed"
+                                        ? "border-[rgba(93,117,99,0.26)] bg-[rgba(238,244,238,0.92)] shadow-[0_16px_30px_rgba(65,82,71,0.08)]"
+                                        : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
+                                }`}
+                            >
+                                <p className="text-sm font-semibold text-[var(--text)]">Detailed</p>
+                                <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
+                                    A fuller reflection with suggestions and nuance.
+                                </p>
+                            </button>
+                        </div>
+
+                        <div className="app-panel-muted mt-8 rounded-[28px] p-5">
+                            <div className="flex items-start gap-3">
+                                <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                                    <Shield size={18} />
+                                </span>
+                                <div>
+                                    <p className="eyebrow">Privacy</p>
+                                    <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">Local by default.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="app-panel rounded-[30px] p-6 xl:col-span-2">
+                        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+                            <div>
+                                <div className="flex items-center gap-3">
+                                    <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                                        <Cpu size={18} />
+                                    </span>
+                                    <div>
+                                        <p className="eyebrow">Primary Model</p>
+                                        <h3 className="text-xl font-semibold text-[var(--text)]">AI setup</h3>
+                                    </div>
+                                </div>
+
+                                <div className="mt-5 flex flex-col gap-3">
+                                    {availableModels.map((model) => (
+                                        <button
+                                            key={model.id}
+                                            onClick={() => setModelName(model.id)}
+                                            className={`rounded-[24px] border p-4 text-left transition-all ${
+                                                modelName === model.id
+                                                    ? "border-[rgba(93,117,99,0.26)] bg-[rgba(238,244,238,0.92)] shadow-[0_16px_30px_rgba(65,82,71,0.08)]"
+                                                    : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
+                                            }`}
+                                        >
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div>
+                                                    <p className="font-mono text-sm font-semibold text-[var(--text)]">
+                                                        {model.label}
+                                                    </p>
+                                                    <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
+                                                        {model.description}
+                                                    </p>
+                                                </div>
+                                                {modelName === model.id && (
+                                                    <Check size={16} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
+                                                )}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">
+                                    Install with <code className="rounded bg-[rgba(255,255,255,0.72)] px-1.5 py-0.5">ollama pull {modelName}</code>
+                                </p>
+                            </div>
+
+                            <div className="flex flex-col gap-5">
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="icon-badge h-11 w-11 rounded-[1rem] bg-[linear-gradient(145deg,rgba(128,151,171,0.22),rgba(255,255,255,0.46))]">
+                                            <Brain size={18} />
+                                        </span>
+                                        <div>
+                                            <p className="eyebrow">Emotion Model</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-5 flex flex-col gap-3">
+                                        {emoModels.map((model) => (
+                                            <button
+                                                key={model.id}
+                                                onClick={() => setEmotionModel(model.id)}
+                                                className={`rounded-[24px] border p-4 text-left transition-all ${
+                                                    emotionModel === model.id
+                                                        ? "border-[rgba(118,136,154,0.22)] bg-[rgba(233,240,245,0.92)] shadow-[0_16px_30px_rgba(67,83,96,0.08)]"
+                                                        : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between gap-4">
+                                                    <div>
+                                                        <p className="font-mono text-sm font-semibold text-[var(--text)]">
+                                                            {model.label}
+                                                        </p>
+                                                        <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
+                                                            {model.description}
+                                                        </p>
+                                                    </div>
+                                                    {emotionModel === model.id && (
+                                                        <Check size={16} className="mt-0.5 shrink-0 text-[#4d6475]" />
+                                                    )}
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="app-panel-muted rounded-[28px] p-5">
+                                    <div className="flex items-start gap-3">
+                                        <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                                            <Shield size={18} />
+                                        </span>
+                                        <div>
+                                            <p className="eyebrow">What stays local</p>
+                                            <div className="mt-3 space-y-2 text-sm leading-7 text-[var(--muted-strong)]">
+                                                <p className="flex items-center gap-2">
+                                                    <Check size={14} className="text-[var(--accent-strong)]" />
+                                                    AES-256-GCM
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <Check size={14} className="text-[var(--accent-strong)]" />
+                                                    No telemetry
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <FolderOpen size={14} className="text-[var(--accent-strong)]" />
+                                                    ~/Library/Application Support/Sanctum/
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-            </section>
 
-            {/* AI Disclaimer */}
-            <p className="text-[10px] text-center text-gray-500/60 mb-6 select-none">
-                Sanctum is for self-reflection, not a substitute for professional medical advice.
-            </p>
-
-            {/* Save Button */}
-            <button
-                onClick={handleSave}
-                className={`w-full py-3 rounded-xl font-medium text-sm transition-all ${saved
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-accent/10 text-accent border border-accent/30 hover:bg-accent/20'
-                    }`}
-            >
-                {saved ? '✓ Saved' : 'Save Settings'}
-            </button>
+            </div>
         </div>
     );
 }
