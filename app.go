@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -21,8 +22,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
@@ -512,6 +515,17 @@ type HardwareInfo struct {
 	Recommended string `json:"recommended_model"`
 }
 
+type PullModelProgress struct {
+	Model     string `json:"model"`
+	Status    string `json:"status"`
+	Digest    string `json:"digest,omitempty"`
+	Total     int64  `json:"total,omitempty"`
+	Completed int64  `json:"completed,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+var ollamaStatusClient = &http.Client{Timeout: 5 * time.Second}
+
 // macOS specific hardware detection using sysctl
 func (a *App) DetectHardware() HardwareInfo {
 	info := HardwareInfo{
@@ -542,7 +556,7 @@ func (a *App) DetectHardware() HardwareInfo {
 }
 
 func (a *App) IsOllamaRunning() bool {
-	resp, err := http.Get("http://localhost:11434/")
+	resp, err := ollamaStatusClient.Get("http://localhost:11434/")
 	if err != nil {
 		return false
 	}
@@ -551,7 +565,7 @@ func (a *App) IsOllamaRunning() bool {
 }
 
 func (a *App) ListModels() []string {
-	resp, err := http.Get("http://localhost:11434/api/tags")
+	resp, err := ollamaStatusClient.Get("http://localhost:11434/api/tags")
 	if err != nil {
 		return []string{}
 	}
@@ -574,21 +588,51 @@ func (a *App) ListModels() []string {
 	return models
 }
 
+func (a *App) emitPullModelProgress(progress PullModelProgress) {
+	if a.ctx == nil {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "ollama:pull-progress", progress)
+}
+
 func (a *App) PullModel(modelName string) error {
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"name":   modelName,
-		"stream": false, // blocking call so frontend knows when it's done
+		"stream": true,
 	})
 
 	resp, err := http.Post("http://localhost:11434/api/pull", "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
+		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("Ollama API returned status: %d", resp.StatusCode)
+		err := fmt.Errorf("Ollama API returned status: %d", resp.StatusCode)
+		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+		return err
 	}
+
+	decoder := json.NewDecoder(resp.Body)
+	for {
+		var progress PullModelProgress
+		if err := decoder.Decode(&progress); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+			return err
+		}
+
+		progress.Model = modelName
+		a.emitPullModelProgress(progress)
+
+		if progress.Error != "" {
+			return errors.New(progress.Error)
+		}
+	}
+
 	return nil
 }
 
