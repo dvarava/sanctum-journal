@@ -8,6 +8,8 @@ export function AnalyzeJournalCloud(arg1:string,arg2:string):Promise<main.Analys
 
 export function AnalyzeJournalForEntry(arg1:string,arg2:number):Promise<main.AnalysisResult>;
 
+export function CancelPullModel(arg1:string):Promise<boolean>;
+
 export function CheckCrisisMarkers(arg1:string):Promise<main.CrisisResult>;
 
 export function DeleteEntry(arg1:number):Promise<string>;

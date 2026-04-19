@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, ArrowRight, CheckCircle, Cpu, Download, ShieldCheck } from "lucide-react";
-import { DetectHardware, GetSettings, IsOllamaRunning, ListModels, PullModel, SaveSettings } from "../../wailsjs/go/main/App";
+import { CancelPullModel, DetectHardware, GetSettings, IsOllamaRunning, ListModels, PullModel, SaveSettings } from "../../wailsjs/go/main/App";
 import { main } from "../../wailsjs/go/models";
 import { BrowserOpenURL, EventsOn } from "../../wailsjs/runtime/runtime";
 
@@ -37,6 +37,8 @@ const formatElapsedTime = (seconds: number) => {
 
 const formatPullStatus = (status: string) => {
     switch (status) {
+        case "canceled":
+            return "Download canceled.";
         case "pulling manifest":
             return "Finding the model manifest...";
         case "verifying sha256 digest":
@@ -53,6 +55,17 @@ const formatPullStatus = (status: string) => {
     }
 };
 
+const getErrorMessage = (error: unknown) => {
+    if (typeof error === "string") return error;
+    if (error instanceof Error) return error.message;
+    return String(error);
+};
+
+const isCancelError = (message: string) => {
+    const normalized = message.toLowerCase();
+    return normalized.includes("canceled") || normalized.includes("cancelled") || normalized.includes("context canceled");
+};
+
 export function Onboarding({ onComplete }: OnboardingProps) {
     const [step, setStep] = useState(1);
     const [hwInfo, setHwInfo] = useState<main.HardwareInfo | null>(null);
@@ -60,6 +73,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
     const [installedModels, setInstalledModels] = useState<string[]>([]);
     const [isCheckingSystem, setIsCheckingSystem] = useState(true);
     const [isPulling, setIsPulling] = useState(false);
+    const [isCancelingPull, setIsCancelingPull] = useState(false);
     const [pullStatus, setPullStatus] = useState("");
     const [pullProgress, setPullProgress] = useState<number | null>(null);
     const [pullStartedAt, setPullStartedAt] = useState<number | null>(null);
@@ -149,6 +163,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         setPullStatus("Starting model download...");
         setPullStartedAt(Date.now());
         setPullElapsedSeconds(0);
+        setIsCancelingPull(false);
 
         try {
             const isRunning = await IsOllamaRunning();
@@ -170,11 +185,35 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 setInstalledModels(models);
                 setPullError(`Download finished, but ${recommendedModel} did not appear in Ollama's model list yet. Click "Check again" or run "ollama list" to verify it manually.`);
             }
-        } catch (e: any) {
-            setPullError(e.message || "Failed to download model.");
+        } catch (e) {
+            const message = getErrorMessage(e);
+            if (isCancelError(message)) {
+                setPullStatus("Download canceled.");
+                return;
+            }
+            setPullError(message || "Failed to download model.");
         } finally {
             setIsPulling(false);
+            setIsCancelingPull(false);
             setPullStartedAt(null);
+        }
+    };
+
+    const handleCancelInstall = async () => {
+        const recommendedModel = hwInfo?.recommended_model;
+        if (!recommendedModel || !isPulling || isCancelingPull) return;
+
+        setIsCancelingPull(true);
+        setPullStatus("Canceling download...");
+
+        try {
+            const canceled = await CancelPullModel(recommendedModel);
+            if (!canceled) {
+                setPullStatus("Cancel request sent.");
+            }
+        } catch (e) {
+            setPullError(getErrorMessage(e) || "Could not cancel download.");
+            setIsCancelingPull(false);
         }
     };
 
@@ -332,6 +371,16 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                                         </>
                                     )}
                                 </button>
+                                {isPulling && (
+                                    <button
+                                        type="button"
+                                        onClick={handleCancelInstall}
+                                        disabled={isCancelingPull}
+                                        className="action-secondary w-full justify-center"
+                                    >
+                                        {isCancelingPull ? "Canceling..." : "Cancel download"}
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>

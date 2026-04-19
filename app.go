@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -29,9 +30,11 @@ import (
 )
 
 type App struct {
-	ctx       context.Context
-	db        *sql.DB
-	secretKey []byte // just for prototype, will derive this from a user password using Argon2 in future
+	ctx         context.Context
+	db          *sql.DB
+	secretKey   []byte // just for prototype, will derive this from a user password using Argon2 in future
+	pullMu      sync.Mutex
+	pullCancels map[string]context.CancelFunc
 }
 
 func NewApp() *App {
@@ -39,7 +42,8 @@ func NewApp() *App {
 	// in production, replace with Argon2 key derivation from user password
 	key, _ := hex.DecodeString("6368616e676520746869732070617373776f726420746f206120736563726574")
 	return &App{
-		secretKey: key,
+		secretKey:   key,
+		pullCancels: make(map[string]context.CancelFunc),
 	}
 }
 
@@ -604,14 +608,70 @@ func (a *App) emitPullModelProgress(progress PullModelProgress) {
 	runtime.EventsEmit(a.ctx, "ollama:pull-progress", progress)
 }
 
+func (a *App) registerPullModelCancel(modelName string, cancel context.CancelFunc) error {
+	a.pullMu.Lock()
+	defer a.pullMu.Unlock()
+
+	if _, exists := a.pullCancels[modelName]; exists {
+		return fmt.Errorf("%s is already downloading", modelName)
+	}
+
+	a.pullCancels[modelName] = cancel
+	return nil
+}
+
+func (a *App) clearPullModelCancel(modelName string) {
+	a.pullMu.Lock()
+	defer a.pullMu.Unlock()
+	delete(a.pullCancels, modelName)
+}
+
+func (a *App) CancelPullModel(modelName string) bool {
+	a.pullMu.Lock()
+	cancel, ok := a.pullCancels[modelName]
+	a.pullMu.Unlock()
+
+	if !ok {
+		return false
+	}
+
+	cancel()
+	a.emitPullModelProgress(PullModelProgress{Model: modelName, Status: "canceled"})
+	return true
+}
+
 func (a *App) PullModel(modelName string) error {
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"name":   modelName,
 		"stream": true,
 	})
 
-	resp, err := http.Post("http://localhost:11434/api/pull", "application/json", bytes.NewBuffer(requestBody))
+	baseCtx := context.Background()
+	if a.ctx != nil {
+		baseCtx = a.ctx
+	}
+	pullCtx, cancel := context.WithCancel(baseCtx)
+	defer cancel()
+
+	if err := a.registerPullModelCancel(modelName, cancel); err != nil {
+		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+		return err
+	}
+	defer a.clearPullModelCancel(modelName)
+
+	req, err := http.NewRequestWithContext(pullCtx, http.MethodPost, "http://localhost:11434/api/pull", bytes.NewBuffer(requestBody))
 	if err != nil {
+		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		if pullCtx.Err() != nil {
+			a.emitPullModelProgress(PullModelProgress{Model: modelName, Status: "canceled"})
+			return errors.New("model download canceled")
+		}
 		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
 		return err
 	}
@@ -627,6 +687,10 @@ func (a *App) PullModel(modelName string) error {
 	for {
 		var progress PullModelProgress
 		if err := decoder.Decode(&progress); err != nil {
+			if pullCtx.Err() != nil {
+				a.emitPullModelProgress(PullModelProgress{Model: modelName, Status: "canceled"})
+				return errors.New("model download canceled")
+			}
 			if errors.Is(err, io.EOF) {
 				break
 			}

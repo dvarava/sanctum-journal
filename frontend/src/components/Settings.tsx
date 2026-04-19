@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Brain, Gauge, Cpu, User, Shield, Check, FolderOpen } from 'lucide-react';
-import { GetSettings, SaveSettings } from '../../wailsjs/go/main/App';
+import { useState, useEffect, useCallback } from 'react';
+import { Settings as SettingsIcon, Brain, Gauge, Cpu, User, Shield, Check, FolderOpen, Download, AlertTriangle } from 'lucide-react';
+import { CancelPullModel, GetSettings, IsOllamaRunning, ListModels, PullModel, SaveSettings } from '../../wailsjs/go/main/App';
+import { EventsOn } from '../../wailsjs/runtime/runtime';
 
 const coachingStyles = [
     {
@@ -43,6 +44,59 @@ const emoModels = [
     { id: 'emollm:7b', label: 'EmoLLM 7B', description: 'Emotion-specific' },
 ];
 
+type PullProgressEvent = {
+    model?: string;
+    status?: string;
+    total?: number;
+    completed?: number;
+    error?: string;
+};
+
+const normalizeModelName = (modelName: string) => modelName.trim().replace(/:latest$/, "");
+
+const modelIsInstalled = (models: string[], modelName: string) => {
+    if (!modelName || modelName === "default") return true;
+    const target = normalizeModelName(modelName);
+    return models.some((model) => normalizeModelName(model) === target);
+};
+
+const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+const formatPullStatus = (status: string) => {
+    switch (status) {
+        case "canceled":
+            return "Download canceled.";
+        case "pulling manifest":
+            return "Finding the model manifest...";
+        case "verifying sha256 digest":
+            return "Verifying model files...";
+        case "writing manifest":
+            return "Writing model manifest...";
+        case "removing any unused layers":
+            return "Cleaning up old model files...";
+        case "success":
+            return "Model download complete. Checking installation...";
+        default:
+            if (status.startsWith("pulling ")) return "Downloading model files...";
+            return status.charAt(0).toUpperCase() + status.slice(1);
+    }
+};
+
+const getErrorMessage = (error: unknown) => {
+    if (typeof error === "string") return error;
+    if (error instanceof Error) return error.message;
+    return String(error);
+};
+
+const isCancelError = (message: string) => {
+    const normalized = message.toLowerCase();
+    return normalized.includes("canceled") || normalized.includes("cancelled") || normalized.includes("context canceled");
+};
+
+const modelPillClass = "pill-chip min-w-[7.5rem] justify-center";
+const compactModelButtonClass = `${modelPillClass} bg-[rgba(255,255,255,0.72)] text-[var(--accent-strong)] transition-all hover:bg-[rgba(255,255,255,0.9)] disabled:cursor-not-allowed disabled:opacity-55`;
+const installModelButtonClass = `${modelPillClass} border-[rgba(65,82,71,0.2)] bg-[#415247] !text-[#f8f7f2] !shadow-none transition-all hover:bg-[#536b59] disabled:cursor-not-allowed disabled:opacity-100 [&_svg]:!text-[#f8f7f2]`;
+
 export function Settings() {
     const [coachingStyle, setCoachingStyle] = useState('compassionate');
     const [analysisDepth, setAnalysisDepth] = useState('brief');
@@ -51,6 +105,48 @@ export function Settings() {
     const [userName, setUserName] = useState('');
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [ollamaRunning, setOllamaRunning] = useState<boolean | null>(null);
+    const [installedModels, setInstalledModels] = useState<string[]>([]);
+    const [checkingModels, setCheckingModels] = useState(false);
+    const [installingModel, setInstallingModel] = useState("");
+    const [cancelingModel, setCancelingModel] = useState("");
+    const [installFeedbackModel, setInstallFeedbackModel] = useState("");
+    const [installStatus, setInstallStatus] = useState("");
+    const [installProgress, setInstallProgress] = useState<number | null>(null);
+    const [installError, setInstallError] = useState("");
+
+    const refreshModelStatus = useCallback(async () => {
+        setCheckingModels(true);
+        try {
+            const isRunning = await IsOllamaRunning();
+            setOllamaRunning(isRunning);
+
+            if (isRunning) {
+                const models = await ListModels();
+                setInstalledModels(models || []);
+            } else {
+                setInstalledModels([]);
+            }
+        } catch (e) {
+            console.error("Failed checking Ollama", e);
+            setOllamaRunning(false);
+            setInstalledModels([]);
+        } finally {
+            setCheckingModels(false);
+        }
+    }, []);
+
+    const waitForModelToAppear = async (targetModel: string) => {
+        let latestModels: string[] = [];
+
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+            latestModels = (await ListModels()) || [];
+            if (modelIsInstalled(latestModels, targetModel)) return latestModels;
+            if (attempt < 9) await sleep(1000);
+        }
+
+        return latestModels;
+    };
 
     // load settings on mount
     useEffect(() => {
@@ -63,14 +159,201 @@ export function Settings() {
                 setEmotionModel(s.emotion_model || 'default');
                 setUserName(s.user_name || '');
             } catch { }
+            await refreshModelStatus();
             setLoading(false);
         })();
-    }, []);
+    }, [refreshModelStatus]);
+
+    useEffect(() => {
+        const unsubscribe = EventsOn("ollama:pull-progress", (event: PullProgressEvent) => {
+            if (!event || event.model !== installingModel) return;
+
+            if (event.error) {
+                setInstallStatus(event.error);
+                return;
+            }
+
+            if (event.status) {
+                setInstallStatus(formatPullStatus(event.status));
+            }
+
+            if (event.total && event.total > 0 && typeof event.completed === "number") {
+                setInstallProgress(Math.min(100, Math.round((event.completed / event.total) * 100)));
+            }
+        });
+
+        return unsubscribe;
+    }, [installingModel]);
 
     const handleSave = async () => {
         await SaveSettings(coachingStyle, analysisDepth, modelName, emotionModel, userName, true);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
+    };
+
+    const handleInstallModel = async (targetModel: string) => {
+        if (!targetModel || targetModel === "default" || installingModel) return;
+
+        setInstallingModel(targetModel);
+        setInstallFeedbackModel(targetModel);
+        setInstallError("");
+        setInstallProgress(null);
+        setInstallStatus("Starting model download...");
+        setCancelingModel("");
+
+        try {
+            const isRunning = await IsOllamaRunning();
+            setOllamaRunning(isRunning);
+
+            if (!isRunning) {
+                setInstallError("Ollama is not running. Start Ollama, then try again.");
+                return;
+            }
+
+            await PullModel(targetModel);
+
+            setInstallStatus("Checking installed models...");
+            const models = await waitForModelToAppear(targetModel);
+            setInstalledModels(models);
+
+            if (modelIsInstalled(models, targetModel)) {
+                setInstallStatus(`${targetModel} is installed. Save settings to use it.`);
+            } else {
+                setInstallError(`Download finished, but ${targetModel} did not appear in Ollama's model list yet. Click "Check models" to refresh.`);
+            }
+        } catch (e) {
+            const message = getErrorMessage(e);
+            if (isCancelError(message)) {
+                setInstallStatus("Download canceled.");
+                return;
+            }
+            setInstallError(message || "Failed to install model.");
+        } finally {
+            setInstallingModel("");
+            setCancelingModel("");
+        }
+    };
+
+    const handleCancelInstall = async (targetModel: string) => {
+        if (!targetModel || !installingModel || cancelingModel) return;
+
+        setCancelingModel(targetModel);
+        setInstallStatus("Canceling download...");
+
+        try {
+            const canceled = await CancelPullModel(targetModel);
+            if (!canceled) {
+                setInstallStatus("Cancel request sent.");
+            }
+        } catch (e) {
+            setInstallError(getErrorMessage(e) || "Could not cancel download.");
+            setCancelingModel("");
+        }
+    };
+
+    const renderModelInstallPanel = (targetModel: string, label: string) => {
+        if (!targetModel || targetModel === "default") {
+            return (
+                <div className="app-panel-muted rounded-[24px] p-4 text-sm leading-7 text-[var(--muted-strong)]">
+                    The base model will handle emotion analysis.
+                </div>
+            );
+        }
+
+        const isInstalled = modelIsInstalled(installedModels, targetModel);
+        const isInstalling = installingModel === targetModel;
+
+        return (
+            <div className="app-panel-muted rounded-[24px] p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p className="text-sm font-semibold text-[var(--text)]">{label}</p>
+                        <p className="mt-1 text-xs leading-6 text-[var(--muted-strong)]">
+                            {ollamaRunning === false
+                                ? "Ollama is not running."
+                                : isInstalled
+                                    ? "Installed in Ollama."
+                                    : `Install ${targetModel} from Ollama.`}
+                        </p>
+                    </div>
+
+                    {isInstalled ? (
+                        <span className={`${modelPillClass} bg-[rgba(238,244,238,0.92)] text-[var(--accent-strong)]`}>
+                            <Check size={14} />
+                            Installed
+                        </span>
+                    ) : ollamaRunning === false ? (
+                        <button type="button" onClick={refreshModelStatus} disabled={checkingModels} className={compactModelButtonClass}>
+                            Check models
+                        </button>
+                    ) : isInstalling ? (
+                        <div className="flex flex-wrap gap-2 sm:justify-end">
+                            <button type="button" disabled className={installModelButtonClass}>
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#f8f7f2] border-t-transparent" />
+                                Installing...
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleCancelInstall(targetModel)}
+                                disabled={cancelingModel === targetModel}
+                                className={compactModelButtonClass}
+                            >
+                                {cancelingModel === targetModel ? "Canceling..." : "Cancel"}
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => handleInstallModel(targetModel)}
+                            disabled={isInstalling || Boolean(installingModel) || checkingModels}
+                            className={installModelButtonClass}
+                        >
+                            <Download size={14} />
+                            Install
+                        </button>
+                    )}
+                </div>
+
+                {isInstalling && (
+                    <div className="mt-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-semibold text-[var(--muted-strong)]">
+                                {installStatus || "Downloading model files..."}
+                            </p>
+                            {installProgress !== null && (
+                                <p className="text-xs font-semibold text-[var(--muted)]">{installProgress}%</p>
+                            )}
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[rgba(93,117,99,0.14)]">
+                            <div
+                                className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
+                                style={{ width: `${installProgress ?? 18}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {installFeedbackModel === targetModel && installError && (
+                    <div className="mt-4 rounded-[20px] border border-[rgba(177,95,78,0.22)] bg-[rgba(245,225,221,0.86)] p-4 text-sm leading-7 text-[#8a5f42]">
+                        <div className="flex items-start gap-3">
+                            <AlertTriangle className="mt-1 shrink-0 text-[#9a5d4d]" size={18} />
+                            <div>
+                                <p>{installError}</p>
+                                <button type="button" onClick={refreshModelStatus} className="action-secondary mt-3 inline-flex">
+                                    Check models
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {installFeedbackModel === targetModel && installStatus && !installingModel && !installError && (
+                    <div className="mt-4 rounded-[20px] border border-[rgba(93,117,99,0.16)] bg-[rgba(238,244,238,0.92)] p-4 text-sm leading-7 text-[var(--accent-strong)]">
+                        {installStatus}
+                    </div>
+                )}
+            </div>
+        );
     };
 
     if (loading) {
@@ -258,9 +541,18 @@ export function Settings() {
                                     ))}
                                 </div>
 
-                                <p className="mt-3 text-[11px] leading-5 text-[var(--muted)]">
-                                    Install with <code className="rounded bg-[rgba(255,255,255,0.72)] px-1.5 py-0.5">ollama pull {modelName}</code>
-                                </p>
+                                <div className="mt-4 flex flex-col gap-3">
+                                    {checkingModels ? (
+                                        <div className="app-panel-muted rounded-[24px] p-4">
+                                            <div className="flex items-center gap-3 text-sm font-semibold text-[var(--muted-strong)]">
+                                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+                                                Checking installed models...
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        renderModelInstallPanel(modelName, "Selected primary model")
+                                    )}
+                                </div>
                             </div>
 
                             <div className="flex flex-col gap-5">
@@ -302,6 +594,12 @@ export function Settings() {
                                         ))}
                                     </div>
                                 </div>
+
+                                {emotionModel !== "default" && (
+                                    <div>
+                                        {renderModelInstallPanel(emotionModel, "Selected emotion model")}
+                                    </div>
+                                )}
 
                                 <div className="app-panel-muted rounded-[28px] p-5">
                                     <div className="flex items-start gap-3">
