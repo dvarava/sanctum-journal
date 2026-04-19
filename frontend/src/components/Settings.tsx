@@ -89,9 +89,7 @@ export function Settings() {
                 <section className="app-panel-strong rounded-[32px] p-6 sm:p-8">
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                         <div className="flex items-start gap-4">
-                            <span className="icon-badge h-14 w-14 rounded-[1.4rem]">
-                                <SettingsIcon size={24} />
-                            </span>
+                    
                             <div className="max-w-2xl">
                                 <p className="eyebrow">Preferences</p>
                                 <h2 className="page-title mt-3">Shape the tone of your journal</h2>
@@ -207,15 +205,15 @@ export function Settings() {
                         </div>
 
                         <div className="app-panel-muted mt-8 rounded-[28px] p-5">
-                            <div className="flex items-start gap-3">
-                                <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                                    <Shield size={18} />
-                                </span>
-                                <div>
-                                    <p className="eyebrow">Privacy</p>
-                                    <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">Local by default.</p>
-                                </div>
-                            </div>
+                            <p className="eyebrow">Current</p>
+                            <p className="mt-3 text-lg font-semibold text-[var(--text)]">
+                                {analysisDepth === "brief" ? "Short reframe" : "Longer reflection"}
+                            </p>
+                            <p className="mt-2 text-sm leading-7 text-[var(--muted-strong)]">
+                                {analysisDepth === "brief"
+                                    ? "A quicker response after each analysis."
+                                    : "More context and a fuller response."}
+                            </p>
                         </div>
                     </section>
 

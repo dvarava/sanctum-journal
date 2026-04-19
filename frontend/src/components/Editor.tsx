@@ -51,7 +51,7 @@ export function Editor({
 
     return (
         <div className="page-shell enter-soft">
-            <section className="app-panel-strong flex min-h-[72vh] flex-col rounded-[32px] p-4 sm:p-6">
+            <section className="app-panel-strong flex min-h-[70vh] flex-col rounded-[32px] p-4 sm:min-h-[76vh] sm:p-6">
                 <div className="flex items-start justify-between gap-4 px-2 pb-4 sm:px-3">
                     <div className="min-w-0 flex-1">
                         <p className="eyebrow">{dateStr}</p>
@@ -76,8 +76,8 @@ export function Editor({
                     <textarea
                         value={value}
                         onChange={(e) => onChange(e.target.value)}
-                        placeholder="What feels most present right now?"
-                        className="h-full min-h-[480px] w-full bg-transparent px-5 py-5 pb-28 text-[1.02rem] leading-8 text-[var(--muted-strong)] outline-none placeholder:text-[rgba(93,101,89,0.48)] sm:px-7 sm:py-6 sm:pb-28"
+                        placeholder="Start writing to unlock your thoughts..."
+                        className="h-full min-h-[500px] w-full bg-transparent px-5 py-5 pb-28 text-[1.02rem] leading-8 text-[var(--muted-strong)] outline-none placeholder:text-[rgba(93,101,89,0.48)] sm:min-h-[560px] sm:px-7 sm:py-6 sm:pb-28"
                         spellCheck={true}
                     />
 
@@ -88,7 +88,7 @@ export function Editor({
                                 className="inline-flex h-9 items-center justify-center gap-2 rounded-full border border-[var(--line)] bg-[rgba(255,255,255,0.86)] px-3 text-sm font-medium text-[var(--muted-strong)] transition-all hover:bg-white"
                             >
                                 <Sparkles size={14} />
-                                Prompt
+                                Inspire me
                             </button>
 
                             <div className="flex items-center rounded-full border border-[var(--line)] bg-[rgba(255,255,255,0.72)] p-1">

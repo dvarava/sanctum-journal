@@ -8,6 +8,10 @@ interface HistoryListProps {
 
 export function HistoryList({ entries, onSelectEntry }: HistoryListProps) {
     const currentDate = new Date();
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 6);
+
+    const entriesThisWeek = entries.filter((entry) => new Date(entry.created_at) >= weekAgo).length;
     const entriesThisMonth = entries.filter((entry) => {
         const entryDate = new Date(entry.created_at);
         return (
@@ -26,10 +30,14 @@ export function HistoryList({ entries, onSelectEntry }: HistoryListProps) {
                             <h2 className="page-title mt-3">Your journal history</h2>
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid gap-3 sm:grid-cols-3">
                             <div className="metric-card">
                                 <span className="metric-label">Entries</span>
                                 <span className="metric-value">{entries.length}</span>
+                            </div>
+                            <div className="metric-card">
+                                <span className="metric-label">This Week</span>
+                                <span className="metric-value">{entriesThisWeek}</span>
                             </div>
                             <div className="metric-card">
                                 <span className="metric-label">This Month</span>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Calendar, History as HistoryIcon, PenTool, ShieldCheck } from "lucide-react";
+import { Calendar, History as HistoryIcon, PenTool } from "lucide-react";
 import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries, DeleteEntry, CheckCrisisMarkers, GetSettings } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 import { Layout } from "./components/Layout";
@@ -23,6 +23,15 @@ const getEntriesThisWeek = (entries: main.Entry[]) => {
   weekAgo.setDate(weekAgo.getDate() - 6);
 
   return entries.filter((entry) => new Date(entry.created_at) >= weekAgo).length;
+};
+
+const getEntriesThisMonth = (entries: main.Entry[]) => {
+  const now = new Date();
+
+  return entries.filter((entry) => {
+    const entryDate = new Date(entry.created_at);
+    return entryDate.getMonth() === now.getMonth() && entryDate.getFullYear() === now.getFullYear();
+  }).length;
 };
 
 function App() {
@@ -249,6 +258,7 @@ function App() {
         const greeting = displayName ? `${timeGreeting}, ${displayName}.` : `${timeGreeting}.`;
         const recentEntries = history.slice(0, 3);
         const entriesThisWeek = getEntriesThisWeek(history);
+        const entriesThisMonth = getEntriesThisMonth(history);
 
         return (
           <div className="page-shell enter-soft">
@@ -280,9 +290,9 @@ function App() {
                       <span className="metric-label">This Week</span>
                       <span className="metric-value">{entriesThisWeek}</span>
                     </div>
-                    <div className="pill-chip bg-[rgba(255,255,255,0.62)]">
-                      <ShieldCheck size={14} className="text-[var(--accent-strong)]" />
-                      Local-first
+                    <div className="metric-card">
+                      <span className="metric-label">This Month</span>
+                      <span className="metric-value">{entriesThisMonth}</span>
                     </div>
                   </div>
 

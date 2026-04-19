@@ -67,11 +67,6 @@ export function Layout({ children, activeView, onNavigate, rightPanel }: LayoutP
                                     <h1 className="mt-1 text-xl font-semibold text-[var(--text)]">Sanctum Journal</h1>
                                 </div>
                             </div>
-
-                            <div className="hidden items-center gap-2 rounded-full border border-[var(--line)] bg-[rgba(255,255,255,0.62)] px-3 py-2 text-xs font-medium text-[var(--muted-strong)] lg:inline-flex">
-                                <ShieldCheck size={14} className="text-[var(--accent-strong)]" />
-                                Local-first
-                            </div>
                         </div>
 
                         <div className="flex gap-3 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
@@ -101,6 +96,11 @@ export function Layout({ children, activeView, onNavigate, rightPanel }: LayoutP
                                     </button>
                                 );
                             })}
+                        </div>
+
+                        <div className="hidden items-center gap-2 rounded-full border border-[var(--line)] bg-[rgba(255,255,255,0.62)] px-3 py-2 text-xs font-medium text-[var(--muted-strong)] lg:mt-auto lg:inline-flex lg:self-start">
+                            <ShieldCheck size={14} className="text-[var(--accent-strong)]" />
+                            Local-first
                         </div>
                     </div>
                 </nav>

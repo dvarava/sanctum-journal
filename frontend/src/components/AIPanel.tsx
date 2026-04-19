@@ -1,4 +1,4 @@
-import { AlertCircle, Brain, Cloud, Heart, MessageCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { Brain, Heart, Info, MessageCircle, Sparkles } from "lucide-react";
 
 interface AnalysisResult {
     emotions: string[];
@@ -121,28 +121,25 @@ export function AIPanel({ analysis, loading, status, useCloud }: AIPanelProps) {
             </section>
 
             <section
-                className={`rounded-[24px] border p-4 text-sm leading-6 transition-colors ${
+                className={`mt-auto rounded-[24px] border p-4 text-sm leading-6 transition-colors ${
                     useCloud
                         ? "border-[rgba(118,136,154,0.22)] bg-[rgba(233,240,245,0.84)] text-[#476071]"
                         : "border-[rgba(93,117,99,0.18)] bg-[rgba(238,244,238,0.84)] text-[var(--accent-strong)]"
                 }`}
             >
                 <div className="flex items-start gap-3">
-                    <span className="mt-0.5">
-                        {useCloud ? <Cloud size={16} /> : <ShieldCheck size={16} />}
-                    </span>
+                    <Info size={16} className="mt-0.5 shrink-0" />
                     <p>
-                        {useCloud ? "Cloud mode." : "Local mode."}
+                        {useCloud
+                            ? "Cloud Mode Active. Analysis data is processed via OpenAI API."
+                            : "Your entries are encrypted and analyzed locally. No data leaves this device."}
                     </p>
                 </div>
             </section>
 
-            <div className="mt-auto rounded-[22px] border border-[rgba(184,143,99,0.16)] bg-[rgba(250,247,241,0.76)] p-4 text-xs leading-6 text-[var(--muted)]">
-                <div className="flex items-start gap-3">
-                    <AlertCircle size={15} className="mt-0.5 text-[var(--warm-strong)]" />
-                    <p>Self-reflection only.</p>
-                </div>
-            </div>
+            <p className="px-1 text-center text-[11px] leading-5 text-[var(--muted)]">
+                Sanctum is for self-reflection. Not a substitute for professional medical advice.
+            </p>
         </div>
     );
 }
