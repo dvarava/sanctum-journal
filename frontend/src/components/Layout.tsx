@@ -43,14 +43,14 @@ export function Layout({ children, activeView, onNavigate, rightPanel }: LayoutP
             </div>
 
             <div className="relative z-10 flex min-h-screen flex-col lg:flex-row">
-                <nav className="w-full shrink-0 border-b border-[var(--line)] bg-[rgba(250,248,242,0.58)] backdrop-blur-xl lg:min-h-screen lg:w-[240px] lg:border-b-0 lg:border-r">
-                    <div className="flex flex-col gap-5 px-4 py-4 sm:px-5 lg:h-full lg:px-6 lg:py-7">
-                        <div className="flex items-center justify-between gap-4 lg:flex-col lg:items-start">
-                            <div className="flex items-start gap-4">
-                                <div className="icon-badge h-14 w-14 rounded-[1.4rem]">
+                <nav className="app-nav" aria-label="Primary navigation">
+                    <div className="app-nav-inner">
+                        <div className="app-nav-top">
+                            <div className="app-brand">
+                                <div className="icon-badge app-brand-mark">
                                     <svg
-                                        width="28"
-                                        height="28"
+                                        width="24"
+                                        height="24"
                                         viewBox="0 0 24 24"
                                         fill="none"
                                         stroke="currentColor"
@@ -63,45 +63,44 @@ export function Layout({ children, activeView, onNavigate, rightPanel }: LayoutP
                                         <path d="M12 15V7" />
                                     </svg>
                                 </div>
-                                <div>
-                                    <h1 className="mt-1 text-xl font-semibold text-[var(--text)]">Sanctum Journal</h1>
+                                <div className="app-brand-copy">
+                                    <h1>Sanctum Journal</h1>
+                                    <span>Private reflection space</span>
                                 </div>
                             </div>
+
+                            {/* <div className="app-nav-privacy">
+                                <ShieldCheck size={14} />
+                                <span>Local-first</span>
+                            </div> */}
                         </div>
 
-                        <div className="flex gap-3 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
+                        <div className="app-nav-list">
                             {navItems.map((item) => {
                                 const isActive = activeView === item.id;
 
                                 return (
                                     <button
                                         key={item.id}
+                                        type="button"
                                         onClick={() => onNavigate(item.id)}
-                                        className={`group flex min-w-[170px] items-center gap-3 rounded-[20px] px-4 py-3 text-left transition-all duration-200 lg:min-w-0 ${
-                                            isActive
-                                                ? "bg-[rgba(93,117,99,0.16)] text-[var(--accent-strong)] shadow-[0_16px_30px_rgba(65,82,71,0.12)] ring-1 ring-[rgba(93,117,99,0.18)]"
-                                                : "bg-[rgba(255,255,255,0.4)] text-[var(--muted-strong)] hover:bg-[rgba(255,255,255,0.74)] hover:text-[var(--text)]"
-                                        }`}
+                                        className={`app-nav-button${isActive ? " is-active" : ""}`}
+                                        aria-current={isActive ? "page" : undefined}
+                                        title={item.label}
                                     >
-                                        <span
-                                            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition-colors ${
-                                                isActive
-                                                    ? "bg-[rgba(255,255,255,0.76)]"
-                                                    : "bg-[rgba(255,255,255,0.52)] group-hover:bg-[rgba(255,255,255,0.86)]"
-                                            }`}
-                                        >
+                                        <span className="app-nav-icon">
                                             <item.icon size={18} strokeWidth={isActive ? 2.3 : 2} />
                                         </span>
-                                        <span className="min-w-0 text-sm font-semibold">{item.label}</span>
+                                        <span className="app-nav-label">{item.label}</span>
                                     </button>
                                 );
                             })}
                         </div>
-
-                        <div className="hidden items-center gap-2 rounded-full border border-[var(--line)] bg-[rgba(255,255,255,0.62)] px-3 py-2 text-xs font-medium text-[var(--muted-strong)] lg:mt-auto lg:inline-flex lg:self-start">
-                            <ShieldCheck size={14} className="text-[var(--accent-strong)]" />
+{/* 
+                        <div className="app-nav-privacy app-nav-privacy-desktop">
+                            <ShieldCheck size={14} />
                             Local-first
-                        </div>
+                        </div> */}
                     </div>
                 </nav>
 

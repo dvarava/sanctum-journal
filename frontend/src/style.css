@@ -210,6 +210,194 @@ textarea {
         line-height: 1.7;
     }
 
+    .app-nav {
+        width: 100%;
+        flex-shrink: 0;
+        border-bottom: 1px solid var(--line);
+        background: rgba(250, 248, 242, 0.68);
+        backdrop-filter: blur(22px);
+    }
+
+    .app-nav-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+        padding: 0.75rem;
+    }
+
+    .app-nav-top {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.65rem;
+    }
+
+    .app-brand {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .app-brand-mark {
+        width: 2.5rem !important;
+        height: 2.5rem !important;
+        flex: 0 0 auto;
+        border-radius: 1.25rem !important;
+    }
+
+    .app-brand-copy {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+
+    .app-brand-copy h1 {
+        min-width: 0;
+        margin: 0;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 1.02rem;
+        font-weight: 700;
+        line-height: 1.15;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .app-brand-copy span {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .app-nav-privacy {
+        display: inline-flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 0.35rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.62);
+        color: var(--muted-strong);
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1;
+        padding: 0.45rem 0.6rem;
+    }
+
+    .app-nav-privacy svg {
+        color: var(--accent-strong);
+        flex: 0 0 auto;
+    }
+
+    .app-nav-privacy-desktop {
+        display: none;
+    }
+
+    .app-nav-list {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.45rem;
+    }
+
+    .app-nav-button {
+        display: flex;
+        min-width: 0;
+        min-height: 3.45rem;
+        width: 100%;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+        border: 1px solid rgba(79, 96, 82, 0.16);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow:
+            0 10px 24px rgba(65, 82, 71, 0.07),
+            inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        color: var(--muted-strong);
+        padding: 0.42rem 0.25rem;
+        text-align: center;
+        transition:
+            background-color 180ms ease,
+            border-color 180ms ease,
+            box-shadow 180ms ease,
+            color 180ms ease,
+            transform 180ms ease;
+    }
+
+    .app-nav-button:hover {
+        border-color: rgba(93, 117, 99, 0.28);
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow:
+            0 14px 28px rgba(65, 82, 71, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.82);
+        color: var(--text);
+        transform: translateY(-1px);
+    }
+
+    .app-nav-button:focus-visible {
+        outline: 2px solid rgba(93, 117, 99, 0.34);
+        outline-offset: 2px;
+    }
+
+    .app-nav-button.is-active {
+        border-color: rgba(93, 117, 99, 0.36);
+        background: linear-gradient(135deg, rgba(223, 233, 222, 0.95), rgba(255, 255, 255, 0.78));
+        color: var(--accent-strong);
+        box-shadow:
+            0 16px 32px rgba(65, 82, 71, 0.14),
+            inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .app-nav-icon {
+        display: inline-flex;
+        width: 1.9rem;
+        height: 1.9rem;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border-radius: 1rem;
+        border: 1px solid rgba(93, 117, 99, 0.14);
+        background: rgba(223, 233, 222, 0.82);
+        color: var(--accent-strong);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+        transition:
+            background-color 180ms ease,
+            border-color 180ms ease,
+            color 180ms ease;
+    }
+
+    .app-nav-button:hover .app-nav-icon {
+        border-color: rgba(93, 117, 99, 0.22);
+        background: rgba(238, 244, 238, 0.95);
+    }
+
+    .app-nav-button.is-active .app-nav-icon {
+        border-color: rgba(93, 117, 99, 0.22);
+        background: rgba(255, 255, 255, 0.9);
+    }
+
+    .app-nav-label {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        font-size: 0.72rem;
+        font-weight: 800;
+        line-height: 1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .icon-badge {
         display: inline-flex;
         align-items: center;
@@ -375,8 +563,145 @@ textarea {
     }
 }
 
+@media (max-width: 360px) {
+    .app-nav-inner {
+        padding: 0.65rem;
+    }
+
+    .app-brand-mark {
+        width: 2.25rem !important;
+        height: 2.25rem !important;
+    }
+
+    .app-brand-copy h1 {
+        font-size: 0.95rem;
+    }
+
+    .app-brand-copy span,
+    .app-nav-privacy span {
+        display: none;
+    }
+
+    .app-nav-button {
+        min-height: 3.1rem;
+        padding: 0.35rem 0.2rem;
+    }
+
+    .app-nav-icon {
+        width: 2rem;
+        height: 2rem;
+    }
+
+    .app-nav-label {
+        display: none;
+    }
+}
+
+@media (min-width: 640px) {
+    .app-nav-inner {
+        gap: 1rem;
+        padding: 1rem 1.25rem;
+    }
+
+    .app-brand {
+        gap: 0.85rem;
+    }
+
+    .app-brand-mark {
+        width: 2.85rem !important;
+        height: 2.85rem !important;
+    }
+
+    .app-brand-copy h1 {
+        font-size: 1.15rem;
+    }
+
+    .app-nav-button {
+        min-height: 3.4rem;
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 0.65rem;
+        padding: 0.55rem 0.75rem;
+        text-align: left;
+    }
+
+    .app-nav-icon {
+        width: 2.15rem;
+        height: 2.15rem;
+    }
+
+    .app-nav-label {
+        font-size: 0.84rem;
+    }
+}
+
 @media (min-width: 768px) {
     .page-shell {
         padding: 2.75rem 2rem 3rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .app-nav {
+        min-height: 100vh;
+        width: 240px;
+        border-right: 1px solid var(--line);
+        border-bottom: 0;
+    }
+
+    .app-nav-inner {
+        height: 100%;
+        gap: 1.5rem;
+        padding: 1.75rem 1.5rem;
+    }
+
+    .app-nav-top {
+        align-items: flex-start;
+        justify-content: flex-start;
+    }
+
+    .app-brand {
+        align-items: center;
+    }
+
+    .app-brand-mark {
+        width: 3.5rem !important;
+        height: 3.5rem !important;
+    }
+
+    .app-brand-copy h1 {
+        margin-top: 0;
+        font-size: 1.25rem;
+        white-space: normal;
+    }
+
+    .app-brand-copy span,
+    .app-nav-top .app-nav-privacy {
+        display: none;
+    }
+
+    .app-nav-list {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+
+    .app-nav-button {
+        min-height: 4.25rem;
+        padding: 0.75rem 0.95rem;
+    }
+
+    .app-nav-icon {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
+
+    .app-nav-label {
+        font-size: 0.875rem;
+    }
+
+    .app-nav-privacy-desktop {
+        display: inline-flex;
+        margin-top: auto;
+        align-self: flex-start;
     }
 }
