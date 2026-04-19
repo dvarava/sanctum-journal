@@ -106,7 +106,7 @@ export function Layout({ children, activeView, onNavigate, rightPanel }: LayoutP
                 </nav>
 
                 <main className="flex min-h-0 flex-1 flex-col xl:flex-row">
-                    <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+                    <div className="content-scroll min-h-0 flex-1">{children}</div>
 
                     {/* Right Panel */}
                     {rightPanel && (

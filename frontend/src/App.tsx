@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Calendar, History as HistoryIcon, PenTool } from "lucide-react";
-import { SaveEntry, AnalyzeJournal, AnalyzeJournalCloud, GetEntries, DeleteEntry, CheckCrisisMarkers, GetSettings } from "../wailsjs/go/main/App";
+import { SaveEntry, AnalyzeJournalCloud, AnalyzeJournalForEntry, GetEntries, DeleteEntry, CheckCrisisMarkers, GetSettings } from "../wailsjs/go/main/App";
 import { main } from "../wailsjs/go/models";
 import { Layout } from "./components/Layout";
 import { Editor } from "./components/Editor";
@@ -10,12 +10,18 @@ import { Heatmap } from "./components/Heatmap";
 import { MoodLineChart } from "./components/MoodLineChart";
 import { CrisisScreen } from "./components/CrisisScreen";
 import { Settings } from "./components/Settings";
-import { InsightToast } from "./components/InsightToast";
 import { Onboarding } from "./components/Onboarding";
+import { AnalyzePromptToast } from "./components/AnalyzePromptToast";
 
 interface AnalysisResult {
   emotions: string[];
   coaching: string;
+}
+
+interface SavedAnalysisPrompt {
+  id: number;
+  title: string;
+  text: string;
 }
 
 const getEntriesThisWeek = (entries: main.Entry[]) => {
@@ -46,13 +52,13 @@ function App() {
 
   // AI state
   const [aiResponse, setAiResponse] = useState<AnalysisResult | null>(null);
+  const [analyzedText, setAnalyzedText] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiStatus, setAiStatus] = useState("");
   const [isOnboarding, setIsOnboarding] = useState(false);
-
-  // auto-coaching insight
-  const [pendingInsight, setPendingInsight] = useState<AnalysisResult | null>(null);
-  const [pendingInsightContext, setPendingInsightContext] = useState<{ text: string; title: string } | null>(null);
+  const journalTextRef = useRef(journalText);
+  const currentEntryIdRef = useRef(currentEntryId);
+  const [analysisPrompt, setAnalysisPrompt] = useState<SavedAnalysisPrompt | null>(null);
 
   // crisis state
   const [isCrisisActive, setIsCrisisActive] = useState(false);
@@ -70,6 +76,14 @@ function App() {
     refreshHistory();
     loadDisplayNameAndOnboarding();
   }, [activeView]);
+
+  useEffect(() => {
+    journalTextRef.current = journalText;
+  }, [journalText]);
+
+  useEffect(() => {
+    currentEntryIdRef.current = currentEntryId;
+  }, [currentEntryId]);
 
   const loadDisplayNameAndOnboarding = async () => {
     try {
@@ -108,6 +122,10 @@ function App() {
   // wire crisis check to text changes
   const handleTextChange = (text: string) => {
     setJournalText(text);
+    if (aiResponse && text !== analyzedText) {
+      setAiResponse(null);
+      setAnalyzedText("");
+    }
     checkForCrisis(text);
   };
 
@@ -118,48 +136,54 @@ function App() {
 
   const refreshHistory = async () => {
     const entries = await GetEntries();
-    setHistory(entries || []);
+    const nextHistory = entries || [];
+    setHistory(nextHistory);
+    return nextHistory;
   };
 
   const handleSave = async () => {
     if (!journalText) return;
     setIsSaving(true);
-
-    // capture text and title before clearing editor
-    const textToAnalyze = journalText;
+    const savedEntryId = currentEntryId;
     const savedTitle = entryTitle;
+    const savedText = journalText;
 
     // simulate a brief delay for visual feedback of "Encrypting"
     await new Promise(r => setTimeout(r, 800));
 
-    // pass detected emotions if available
-    const emotionsToSave = aiResponse?.emotions || [];
+    // Save only the current insight the user explicitly generated.
+    const currentInsight = aiResponse && analyzedText === journalText ? aiResponse : null;
+    const emotionsToSave = currentInsight?.emotions || [];
+    const coachingToSave = currentInsight?.coaching || "";
 
-    await SaveEntry(currentEntryId, entryTitle, journalText, emotionsToSave, aiResponse?.coaching || "");
-    await refreshHistory();
+    await SaveEntry(currentEntryId, entryTitle, journalText, emotionsToSave, coachingToSave);
+    const nextHistory = await refreshHistory();
+    const savedEntry = savedEntryId > 0
+      ? nextHistory.find((entry) => entry.id === savedEntryId)
+      : nextHistory[0];
+
+    if (!currentInsight && !isCrisisActive && savedEntry) {
+      setAnalysisPrompt({
+        id: savedEntry.id,
+        title: savedEntry.title || savedTitle,
+        text: savedEntry.content || savedText,
+      });
+    } else {
+      setAnalysisPrompt(null);
+    }
 
     // reset editor for new entry
     setJournalText("");
     setEntryTitle("");
     setAiResponse(null);
+    setAnalyzedText("");
     setCurrentEntryId(0);
+    currentEntryIdRef.current = 0;
     setIsSaving(false);
-
-    // background auto-coaching — fire and forget, don't block the UI
-    if (textToAnalyze.length >= 20 && !isCrisisActive) {
-      AnalyzeJournal(textToAnalyze)
-        .then((result) => {
-          if (result.coaching && !result.emotions?.includes("Crisis Detected")) {
-            setPendingInsight(result);
-            setPendingInsightContext({ text: textToAnalyze, title: savedTitle });
-          }
-        })
-        .catch(() => { }); // silently fail — auto-coaching is supplementary
-    }
   };
 
-  const handleAnalyze = async () => {
-    if (!journalText || isCrisisActive) return;
+  const runAnalysis = async (textToAnalyze: string, entryId: number) => {
+    if (!textToAnalyze || isCrisisActive) return;
     setIsAnalyzing(true);
 
     if (useCloud) {
@@ -172,21 +196,48 @@ function App() {
       let result;
       if (useCloud) {
         // in production, app will prompt for an API key
-        result = await AnalyzeJournalCloud(journalText, "mock-api-key");
+        result = await AnalyzeJournalCloud(textToAnalyze, "mock-api-key");
       } else {
-        result = await AnalyzeJournal(journalText);
+        result = await AnalyzeJournalForEntry(textToAnalyze, entryId);
       }
 
-      setAiResponse(result as AnalysisResult);
+      if (journalTextRef.current === textToAnalyze && currentEntryIdRef.current === entryId) {
+        setAiResponse(result as AnalysisResult);
+        setAnalyzedText(textToAnalyze);
+      }
     } catch (e) {
-      setAiResponse({
-        emotions: ["Error"],
-        coaching: "Could not analyze entry. Please ensure Ollama is running or check your internet connection."
-      });
+      if (journalTextRef.current === textToAnalyze && currentEntryIdRef.current === entryId) {
+        setAiResponse({
+          emotions: ["Error"],
+          coaching: "Could not analyze entry. Please ensure Ollama is running or check your internet connection."
+        });
+        setAnalyzedText(textToAnalyze);
+      }
     } finally {
       setIsAnalyzing(false);
       setAiStatus("");
     }
+  };
+
+  const handleAnalyze = async () => {
+    await runAnalysis(journalText, currentEntryId);
+  };
+
+  const handleAnalyzeSavedEntry = async () => {
+    if (!analysisPrompt) return;
+
+    const entryToAnalyze = analysisPrompt;
+    setAnalysisPrompt(null);
+    setCurrentEntryId(entryToAnalyze.id);
+    currentEntryIdRef.current = entryToAnalyze.id;
+    setEntryTitle(entryToAnalyze.title);
+    setJournalText(entryToAnalyze.text);
+    journalTextRef.current = entryToAnalyze.text;
+    setAiResponse(null);
+    setAnalyzedText("");
+    setActiveView("write");
+
+    await runAnalysis(entryToAnalyze.text, entryToAnalyze.id);
   };
 
   const handleDelete = async () => {
@@ -203,19 +254,25 @@ function App() {
     setJournalText("");
     setEntryTitle("");
     setAiResponse(null);
+    setAnalyzedText("");
     setCurrentEntryId(0);
+    currentEntryIdRef.current = 0;
     setIsSaving(false);
     setActiveView("write");
   };
 
   const handleSelectEntry = (entry: main.Entry) => {
     setCurrentEntryId(entry.id);
+    currentEntryIdRef.current = entry.id;
     setEntryTitle(entry.title);
     setJournalText(entry.content);
+    journalTextRef.current = entry.content;
     if (entry.emotions && entry.emotions.length > 0) {
       setAiResponse({ emotions: entry.emotions, coaching: entry.coaching || "" });
+      setAnalyzedText(entry.content);
     } else {
       setAiResponse(null);
+      setAnalyzedText("");
     }
     setActiveView("write");
   };
@@ -366,25 +423,10 @@ function App() {
         />
       )}
 
-      {/* Auto-coaching insight toast */}
-      {pendingInsight && (
-        <InsightToast
-          emotions={pendingInsight.emotions}
-          coaching={pendingInsight.coaching}
-          onExpand={() => {
-            if (pendingInsightContext) {
-              setJournalText(pendingInsightContext.text);
-              setEntryTitle(pendingInsightContext.title);
-            }
-            setAiResponse(pendingInsight);
-            setPendingInsight(null);
-            setPendingInsightContext(null);
-            setActiveView("write");
-          }}
-          onDismiss={() => {
-            setPendingInsight(null);
-            setPendingInsightContext(null);
-          }}
+      {analysisPrompt && (
+        <AnalyzePromptToast
+          onAnalyze={handleAnalyzeSavedEntry}
+          onDismiss={() => setAnalysisPrompt(null)}
         />
       )}
 

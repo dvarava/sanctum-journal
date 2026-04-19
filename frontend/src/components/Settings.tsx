@@ -309,7 +309,7 @@ export function Settings() {
                                             <Shield size={18} />
                                         </span>
                                         <div>
-                                            <p className="eyebrow">What stays local</p>
+                                            <p className="eyebrow">PRIVACY</p>
                                             <div className="mt-3 space-y-2 text-sm leading-7 text-[var(--muted-strong)]">
                                                 <p className="flex items-center gap-2">
                                                     <Check size={14} className="text-[var(--accent-strong)]" />

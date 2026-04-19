@@ -351,8 +351,17 @@ func (a *App) CheckCrisisMarkers(text string) CrisisResult {
 	return result
 }
 
-// function to send text to local Ollama instance and return structured data
 func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
+	return a.analyzeJournal(entryText, 0)
+}
+
+// analyzes an existing entry while excluding it from RAG context.
+func (a *App) AnalyzeJournalForEntry(entryText string, currentEntryId int) AnalysisResult {
+	return a.analyzeJournal(entryText, currentEntryId)
+}
+
+// function to send text to local Ollama instance and return structured data
+func (a *App) analyzeJournal(entryText string, currentEntryId int) AnalysisResult {
 	url := "http://localhost:11434/api/generate"
 
 	// check for crisis markers before invoking LLM
@@ -385,7 +394,7 @@ func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
 	}
 
 	// fetch RAG context (similar past entries)
-	similarEntries := a.FindSimilarEntries(entryText, 0, 2)
+	similarEntries := a.FindSimilarEntries(entryText, currentEntryId, 2)
 	ragContext := ""
 	if len(similarEntries) > 0 {
 		ragContext = "\n\nPAST JOURNAL ENTRIES FOR CONTEXT:\n"
@@ -731,7 +740,14 @@ func (a *App) FindSimilarEntries(queryText string, currentEntryId int, limit int
 
 		// arbitrary threshold for "similar"
 		if score > 0.6 {
-			decrypted, _ := a.decrypt(encryptedBlob)
+			decrypted, err := a.decrypt(encryptedBlob)
+			if err != nil {
+				continue
+			}
+
+			if strings.TrimSpace(decrypted) == strings.TrimSpace(queryText) {
+				continue
+			}
 
 			preview := decrypted
 			if len(preview) > 150 {

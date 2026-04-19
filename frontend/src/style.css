@@ -178,6 +178,11 @@ textarea {
         padding: 2rem 1.25rem 2.5rem;
     }
 
+    .content-scroll {
+        overflow-y: scroll;
+        scrollbar-gutter: stable;
+    }
+
     .eyebrow {
         letter-spacing: 0.16em;
         text-transform: uppercase;

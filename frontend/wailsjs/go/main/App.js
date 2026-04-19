@@ -10,6 +10,10 @@ export function AnalyzeJournalCloud(arg1, arg2) {
   return window['go']['main']['App']['AnalyzeJournalCloud'](arg1, arg2);
 }
 
+export function AnalyzeJournalForEntry(arg1, arg2) {
+  return window['go']['main']['App']['AnalyzeJournalForEntry'](arg1, arg2);
+}
+
 export function CheckCrisisMarkers(arg1) {
   return window['go']['main']['App']['CheckCrisisMarkers'](arg1);
 }
