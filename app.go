@@ -71,6 +71,40 @@ type Settings struct {
 	OnboardingComplete bool   `json:"onboarding_complete"`
 }
 
+const defaultEmotionModel = "default"
+
+var ollamaModelAliases = map[string]string{
+	"emollm:7b":     "guanxin/emollm:latest",
+	"emollm:latest": "guanxin/emollm:latest",
+}
+
+func canonicalOllamaModelName(modelName string) string {
+	modelName = strings.TrimSpace(modelName)
+	if alias, ok := ollamaModelAliases[strings.ToLower(modelName)]; ok {
+		return alias
+	}
+	return modelName
+}
+
+func canonicalEmotionModelName(modelName string) string {
+	modelName = canonicalOllamaModelName(modelName)
+	if modelName == "" {
+		return defaultEmotionModel
+	}
+	return modelName
+}
+
+func friendlyPullModelError(requestedModel, actualModel, errMessage string) string {
+	normalized := strings.ToLower(errMessage)
+	if strings.Contains(normalized, "pull model manifest") && strings.Contains(normalized, "file does not exist") {
+		if requestedModel != actualModel {
+			return fmt.Sprintf("The saved model name %s is outdated. I tried %s, but Ollama could not find its manifest. Check the model name in Ollama and try again.", requestedModel, actualModel)
+		}
+		return fmt.Sprintf("Ollama could not find %s. Check that the model name and tag exist in Ollama, then try again.", requestedModel)
+	}
+	return errMessage
+}
+
 // initialize the local SQLite database
 func (a *App) initDB() {
 	appDataDir, _ := os.UserConfigDir()
@@ -138,15 +172,17 @@ func (a *App) initDB() {
 func (a *App) GetSettings() Settings {
 	var s Settings
 	if a.db == nil {
-		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", EmotionModel: "default", OnboardingComplete: false}
+		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", EmotionModel: defaultEmotionModel, OnboardingComplete: false}
 	}
 
 	err := a.db.QueryRow("SELECT coaching_style, analysis_depth, model_name, emotion_model, user_name, onboarding_complete FROM settings WHERE id = 1").
 		Scan(&s.CoachingStyle, &s.AnalysisDepth, &s.ModelName, &s.EmotionModel, &s.UserName, &s.OnboardingComplete)
 	if err != nil {
 		// return defaults if row doesn't exist yet
-		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", EmotionModel: "default", OnboardingComplete: false}
+		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", EmotionModel: defaultEmotionModel, OnboardingComplete: false}
 	}
+	s.ModelName = canonicalOllamaModelName(s.ModelName)
+	s.EmotionModel = canonicalEmotionModelName(s.EmotionModel)
 	return s
 }
 
@@ -154,6 +190,9 @@ func (a *App) SaveSettings(style, depth, model, emotionModel, username string, o
 	if a.db == nil {
 		return "Database not initialized"
 	}
+
+	model = canonicalOllamaModelName(model)
+	emotionModel = canonicalEmotionModelName(emotionModel)
 
 	_, err := a.db.Exec(`
 		UPDATE settings 
@@ -411,7 +450,9 @@ func (a *App) analyzeJournal(entryText string, currentEntryId int) AnalysisResul
 
 	// system prompt with injected style, few-shot examples, and RAG context
 	// if using a specialized EmoLLM, optionally override the 'emotions' field later
-	isDualModel := settings.EmotionModel != "default" && settings.EmotionModel != ""
+	primaryModel := canonicalOllamaModelName(settings.ModelName)
+	emotionModel := canonicalEmotionModelName(settings.EmotionModel)
+	isDualModel := emotionModel != defaultEmotionModel
 
 	// base coaching prompt
 	prompt := fmt.Sprintf(`You are a CBT-informed journaling coach. Analyze this journal entry and respond with JSON.
@@ -445,7 +486,7 @@ Entry: "Had a good day at work but I keep thinking about what my colleague said.
 JSON Response:`, entryText, styleDirective, ragContext, depthDirective)
 
 	requestBody, _ := json.Marshal(map[string]interface{}{
-		"model":  settings.ModelName,
+		"model":  primaryModel,
 		"prompt": prompt,
 		"stream": false,
 		"format": "json",
@@ -489,7 +530,7 @@ JSON Response:`, entryText, styleDirective, ragContext, depthDirective)
 		`, entryText)
 
 		emoReqBody, _ := json.Marshal(map[string]interface{}{
-			"model":  settings.EmotionModel,
+			"model":  emotionModel,
 			"prompt": emoPrompt,
 			"stream": false,
 			"format": "json",
@@ -627,6 +668,9 @@ func (a *App) clearPullModelCancel(modelName string) {
 }
 
 func (a *App) CancelPullModel(modelName string) bool {
+	requestedModel := strings.TrimSpace(modelName)
+	modelName = canonicalOllamaModelName(requestedModel)
+
 	a.pullMu.Lock()
 	cancel, ok := a.pullCancels[modelName]
 	a.pullMu.Unlock()
@@ -636,11 +680,19 @@ func (a *App) CancelPullModel(modelName string) bool {
 	}
 
 	cancel()
-	a.emitPullModelProgress(PullModelProgress{Model: modelName, Status: "canceled"})
+	a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Status: "canceled"})
 	return true
 }
 
 func (a *App) PullModel(modelName string) error {
+	requestedModel := strings.TrimSpace(modelName)
+	modelName = canonicalOllamaModelName(requestedModel)
+	if modelName == "" {
+		err := errors.New("model name is required")
+		a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Error: err.Error()})
+		return err
+	}
+
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"name":   modelName,
 		"stream": true,
@@ -654,14 +706,14 @@ func (a *App) PullModel(modelName string) error {
 	defer cancel()
 
 	if err := a.registerPullModelCancel(modelName, cancel); err != nil {
-		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+		a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Error: err.Error()})
 		return err
 	}
 	defer a.clearPullModelCancel(modelName)
 
 	req, err := http.NewRequestWithContext(pullCtx, http.MethodPost, "http://localhost:11434/api/pull", bytes.NewBuffer(requestBody))
 	if err != nil {
-		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+		a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Error: err.Error()})
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -669,17 +721,17 @@ func (a *App) PullModel(modelName string) error {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		if pullCtx.Err() != nil {
-			a.emitPullModelProgress(PullModelProgress{Model: modelName, Status: "canceled"})
+			a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Status: "canceled"})
 			return errors.New("model download canceled")
 		}
-		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+		a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Error: err.Error()})
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		err := fmt.Errorf("Ollama API returned status: %d", resp.StatusCode)
-		a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+		a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Error: err.Error()})
 		return err
 	}
 
@@ -688,22 +740,26 @@ func (a *App) PullModel(modelName string) error {
 		var progress PullModelProgress
 		if err := decoder.Decode(&progress); err != nil {
 			if pullCtx.Err() != nil {
-				a.emitPullModelProgress(PullModelProgress{Model: modelName, Status: "canceled"})
+				a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Status: "canceled"})
 				return errors.New("model download canceled")
 			}
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			a.emitPullModelProgress(PullModelProgress{Model: modelName, Error: err.Error()})
+			a.emitPullModelProgress(PullModelProgress{Model: requestedModel, Error: err.Error()})
 			return err
 		}
 
-		progress.Model = modelName
-		a.emitPullModelProgress(progress)
-
 		if progress.Error != "" {
-			return errors.New(progress.Error)
+			errMessage := friendlyPullModelError(requestedModel, modelName, progress.Error)
+			progress.Model = requestedModel
+			progress.Error = errMessage
+			a.emitPullModelProgress(progress)
+			return errors.New(errMessage)
 		}
+
+		progress.Model = requestedModel
+		a.emitPullModelProgress(progress)
 	}
 
 	return nil

@@ -41,7 +41,7 @@ const availableModels = [
 
 const emoModels = [
     { id: 'default', label: 'Use Base Model', description: 'Single model' },
-    { id: 'emollm:7b', label: 'EmoLLM 7B', description: 'Emotion-specific' },
+    { id: 'guanxin/emollm:latest', label: 'EmoLLM 7B', description: 'Emotion-specific' },
 ];
 
 type PullProgressEvent = {
@@ -52,7 +52,17 @@ type PullProgressEvent = {
     error?: string;
 };
 
-const normalizeModelName = (modelName: string) => modelName.trim().replace(/:latest$/, "");
+const modelAliases: Record<string, string> = {
+    "emollm:7b": "guanxin/emollm:latest",
+    "emollm:latest": "guanxin/emollm:latest",
+};
+
+const canonicalModelName = (modelName: string) => {
+    const trimmed = modelName.trim();
+    return modelAliases[trimmed.toLowerCase()] || trimmed;
+};
+
+const normalizeModelName = (modelName: string) => canonicalModelName(modelName).replace(/:latest$/, "");
 
 const modelIsInstalled = (models: string[], modelName: string) => {
     if (!modelName || modelName === "default") return true;
@@ -155,8 +165,8 @@ export function Settings() {
                 const s = await GetSettings();
                 setCoachingStyle(s.coaching_style || 'compassionate');
                 setAnalysisDepth(s.analysis_depth || 'brief');
-                setModelName(s.model_name || 'gemma:2b');
-                setEmotionModel(s.emotion_model || 'default');
+                setModelName(canonicalModelName(s.model_name || 'gemma:2b'));
+                setEmotionModel(canonicalModelName(s.emotion_model || 'default'));
                 setUserName(s.user_name || '');
             } catch { }
             await refreshModelStatus();

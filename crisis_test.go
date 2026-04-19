@@ -4,6 +4,27 @@ import (
 	"testing"
 )
 
+func TestCanonicalEmotionModelName(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"legacy emollm tag", "emollm:7b", "guanxin/emollm:latest"},
+		{"legacy latest tag", "emollm:latest", "guanxin/emollm:latest"},
+		{"empty model", "", "default"},
+		{"custom model", "my-local-emotion-model", "my-local-emotion-model"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := canonicalEmotionModelName(tt.in); got != tt.want {
+				t.Fatalf("canonicalEmotionModelName(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCrisisDetection_HighSeverity(t *testing.T) {
 	app := NewApp()
 
