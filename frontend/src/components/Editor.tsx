@@ -91,7 +91,7 @@ export function Editor({
                                 Inspire me
                             </button>
 
-                            <div className="flex items-center rounded-full border border-[var(--line)] bg-[rgba(255,255,255,0.72)] p-1">
+                            {/* <div className="flex items-center rounded-full border border-[var(--line)] bg-[rgba(255,255,255,0.72)] p-1">
                                 <button
                                     onClick={() => setUseCloud(false)}
                                     className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
@@ -114,7 +114,7 @@ export function Editor({
                                 >
                                     <Cloud size={14} />
                                 </button>
-                            </div>
+                            </div> */}
                         </div>
 
                         <div className="flex items-center gap-2">
