@@ -1,6 +1,9 @@
 package main
 
 import (
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -22,6 +25,89 @@ func TestCanonicalEmotionModelName(t *testing.T) {
 				t.Fatalf("canonicalEmotionModelName(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalizeEmotions(t *testing.T) {
+	got := normalizeEmotions([]string{
+		" sad ",
+		"SAD",
+		"self - critical",
+		"self critical",
+		"",
+		"ANXIOUS",
+		"reflective",
+	})
+	want := []string{"Sad", "Self-Critical", "Anxious"}
+
+	if len(got) != len(want) {
+		t.Fatalf("normalizeEmotions length = %d (%v), want %d (%v)", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("normalizeEmotions[%d] = %q, want %q (all: %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestParseEmotionResponseAcceptsObjectAndArray(t *testing.T) {
+	tests := []struct {
+		name     string
+		response string
+		want     []string
+	}{
+		{"object", `{"emotions":[" proud ","PROUD","self - critical"]}`, []string{"Proud", "Self-Critical"}},
+		{"array", `[" anxious ","reflective"]`, []string{"Anxious", "Reflective"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseEmotionResponse(tt.response)
+			if err != nil {
+				t.Fatalf("parseEmotionResponse() error = %v", err)
+			}
+			if len(got) != len(tt.want) {
+				t.Fatalf("parseEmotionResponse() length = %d (%v), want %d (%v)", len(got), got, len(tt.want), tt.want)
+			}
+			for i := range tt.want {
+				if got[i] != tt.want[i] {
+					t.Fatalf("parseEmotionResponse()[%d] = %q, want %q (all: %v)", i, got[i], tt.want[i], got)
+				}
+			}
+		})
+	}
+}
+
+func TestParseEmotionModelHTTPResponse(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader(`{"response":"{\"emotions\":[\" sad \",\"SAD\",\"self - critical\"]}"}`)),
+	}
+
+	got, err := parseEmotionModelHTTPResponse(resp)
+	if err != nil {
+		t.Fatalf("parseEmotionModelHTTPResponse() error = %v", err)
+	}
+
+	want := []string{"Sad", "Self-Critical"}
+	if len(got) != len(want) {
+		t.Fatalf("parseEmotionModelHTTPResponse() length = %d (%v), want %d (%v)", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("parseEmotionModelHTTPResponse()[%d] = %q, want %q (all: %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestParseEmotionModelHTTPResponseReportsHTTPError(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body:       io.NopCloser(strings.NewReader(`{"error":"model not found"}`)),
+	}
+
+	if _, err := parseEmotionModelHTTPResponse(resp); err == nil {
+		t.Fatal("parseEmotionModelHTTPResponse() error = nil, want error")
 	}
 }
 

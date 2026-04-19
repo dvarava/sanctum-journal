@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -78,6 +80,11 @@ var ollamaModelAliases = map[string]string{
 	"emollm:latest": "guanxin/emollm:latest",
 }
 
+var (
+	emotionWhitespacePattern = regexp.MustCompile(`\s+`)
+	emotionHyphenPattern     = regexp.MustCompile(`\s*-\s*`)
+)
+
 func canonicalOllamaModelName(modelName string) string {
 	modelName = strings.TrimSpace(modelName)
 	if alias, ok := ollamaModelAliases[strings.ToLower(modelName)]; ok {
@@ -103,6 +110,73 @@ func friendlyPullModelError(requestedModel, actualModel, errMessage string) stri
 		return fmt.Sprintf("Ollama could not find %s. Check that the model name and tag exist in Ollama, then try again.", requestedModel)
 	}
 	return errMessage
+}
+
+func normalizeEmotionWord(word string) string {
+	word = strings.TrimSpace(word)
+	if word == "" {
+		return ""
+	}
+
+	word = strings.ToLower(word)
+	first, size := utf8.DecodeRuneInString(word)
+	return string(unicode.ToUpper(first)) + word[size:]
+}
+
+func normalizeEmotionToken(token string) string {
+	parts := strings.Split(token, "-")
+	normalized := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = normalizeEmotionWord(part)
+		if part != "" {
+			normalized = append(normalized, part)
+		}
+	}
+	return strings.Join(normalized, "-")
+}
+
+func normalizeEmotionLabel(label string) string {
+	label = strings.TrimSpace(strings.ReplaceAll(label, "_", " "))
+	label = emotionHyphenPattern.ReplaceAllString(label, "-")
+	label = emotionWhitespacePattern.ReplaceAllString(label, " ")
+	if label == "" {
+		return ""
+	}
+
+	tokens := strings.Fields(label)
+	for i, token := range tokens {
+		tokens[i] = normalizeEmotionToken(token)
+	}
+	return strings.Join(tokens, " ")
+}
+
+func emotionDedupKey(label string) string {
+	return strings.NewReplacer(" ", "", "-", "").Replace(strings.ToLower(label))
+}
+
+func normalizeEmotions(emotions []string) []string {
+	normalized := make([]string, 0, len(emotions))
+	seen := make(map[string]bool)
+
+	for _, emotion := range emotions {
+		label := normalizeEmotionLabel(emotion)
+		if label == "" {
+			continue
+		}
+
+		key := emotionDedupKey(label)
+		if seen[key] {
+			continue
+		}
+
+		seen[key] = true
+		normalized = append(normalized, label)
+		if len(normalized) == 3 {
+			break
+		}
+	}
+
+	return normalized
 }
 
 // initialize the local SQLite database
@@ -256,6 +330,7 @@ func (a *App) SaveEntry(id int, title string, text string, emotions []string, co
 	}
 
 	// emotions to JSON string
+	emotions = normalizeEmotions(emotions)
 	emotionsJSON, _ := json.Marshal(emotions)
 	if emotionsJSON == nil {
 		emotionsJSON = []byte("[]")
@@ -322,6 +397,7 @@ func (a *App) GetEntries() []Entry {
 
 		var emotions []string
 		_ = json.Unmarshal([]byte(emotionsJSON), &emotions)
+		emotions = normalizeEmotions(emotions)
 
 		entries = append(entries, Entry{
 			ID:        id,
@@ -518,39 +594,92 @@ JSON Response:`, entryText, styleDirective, ragContext, depthDirective)
 	}
 
 	analysis.SimilarEntries = similarEntries
+	analysis.Emotions = normalizeEmotions(analysis.Emotions)
 
 	// If dual-model is active, invoke EmoLLM to override the general model's emotion array
 	if isDualModel {
-		emoPrompt := fmt.Sprintf(`You are an expert emotion analysis system. Read this journal entry and return ONLY a JSON array of 1 to 3 primary emotions the author is currently feeling. No explanation.
-		
-		ENTRY: "%s"
-		
-		RESPOND STRICTLY IN THIS FORMAT:
-		{"emotions": ["Emotion1", "Emotion2"]}
-		`, entryText)
-
-		emoReqBody, _ := json.Marshal(map[string]interface{}{
-			"model":  emotionModel,
-			"prompt": emoPrompt,
-			"stream": false,
-			"format": "json",
-		})
-
-		emoResp, err := http.Post(url, "application/json", bytes.NewBuffer(emoReqBody))
-		if err == nil {
-			defer emoResp.Body.Close()
-			var emoResult map[string]interface{}
-			_ = json.NewDecoder(emoResp.Body).Decode(&emoResult)
-			if emoResponseStr, ok := emoResult["response"].(string); ok {
-				var emoAnalysis AnalysisResult
-				if err := json.Unmarshal([]byte(emoResponseStr), &emoAnalysis); err == nil && len(emoAnalysis.Emotions) > 0 {
-					analysis.Emotions = emoAnalysis.Emotions
-				}
-			}
+		emotions, err := a.analyzeEmotionsWithModel(url, emotionModel, entryText)
+		if err != nil {
+			log.Printf("Emotion model %q unavailable, using primary model emotions: %v", emotionModel, err)
+		} else {
+			analysis.Emotions = emotions
 		}
 	}
 
 	return analysis
+}
+
+func parseEmotionResponse(responseStr string) ([]string, error) {
+	var analysis AnalysisResult
+	if err := json.Unmarshal([]byte(responseStr), &analysis); err == nil && len(analysis.Emotions) > 0 {
+		return normalizeEmotions(analysis.Emotions), nil
+	}
+
+	var emotions []string
+	if err := json.Unmarshal([]byte(responseStr), &emotions); err == nil && len(emotions) > 0 {
+		return normalizeEmotions(emotions), nil
+	}
+
+	return nil, errors.New("emotion model returned no usable emotions")
+}
+
+func parseEmotionModelHTTPResponse(emoResp *http.Response) ([]string, error) {
+	if emoResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(emoResp.Body, 4096))
+		bodyText := strings.TrimSpace(string(body))
+		if bodyText == "" {
+			return nil, fmt.Errorf("emotion model returned HTTP %d", emoResp.StatusCode)
+		}
+		return nil, fmt.Errorf("emotion model returned HTTP %d: %s", emoResp.StatusCode, bodyText)
+	}
+
+	var emoResult struct {
+		Response string `json:"response"`
+		Error    string `json:"error"`
+	}
+	if err := json.NewDecoder(emoResp.Body).Decode(&emoResult); err != nil {
+		return nil, fmt.Errorf("could not decode emotion model response: %w", err)
+	}
+	if emoResult.Error != "" {
+		return nil, errors.New(emoResult.Error)
+	}
+	if strings.TrimSpace(emoResult.Response) == "" {
+		return nil, errors.New("emotion model returned an empty response")
+	}
+
+	emotions, err := parseEmotionResponse(emoResult.Response)
+	if err != nil {
+		return nil, err
+	}
+	if len(emotions) == 0 {
+		return nil, errors.New("emotion model returned no emotions")
+	}
+
+	return emotions, nil
+}
+
+func (a *App) analyzeEmotionsWithModel(url, modelName, entryText string) ([]string, error) {
+	emoPrompt := fmt.Sprintf(`You are an expert emotion analysis system. Read this journal entry and return ONLY this JSON object with 1 to 3 primary emotions the author is currently feeling. No explanation, markdown, or extra text.
+
+ENTRY: "%s"
+
+RESPOND STRICTLY IN THIS FORMAT:
+{"emotions": ["Emotion1", "Emotion2"]}`, entryText)
+
+	emoReqBody, _ := json.Marshal(map[string]interface{}{
+		"model":  modelName,
+		"prompt": emoPrompt,
+		"stream": false,
+		"format": "json",
+	})
+
+	emoResp, err := http.Post(url, "application/json", bytes.NewBuffer(emoReqBody))
+	if err != nil {
+		return nil, err
+	}
+	defer emoResp.Body.Close()
+
+	return parseEmotionModelHTTPResponse(emoResp)
 }
 
 // mock implementation of OpenAI API
@@ -876,6 +1005,7 @@ func (a *App) FindSimilarEntries(queryText string, currentEntryId int, limit int
 
 			var emotions []string
 			_ = json.Unmarshal([]byte(emotionsJSON), &emotions)
+			emotions = normalizeEmotions(emotions)
 
 			scoredEntries = append(scoredEntries, scoredEntry{
 				score: score,
