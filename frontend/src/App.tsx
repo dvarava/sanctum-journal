@@ -320,9 +320,26 @@ function App() {
         return (
           <div className="page-shell enter-soft">
             <section className="app-panel-strong rounded-[32px] p-6 sm:p-8 lg:p-10">
-              <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_300px]">
-                <div className="flex flex-col gap-6">
-                  <div className="space-y-5">
+              <div className="flex flex-col gap-6">
+                <div className="grid gap-5 lg:grid-cols-2 lg:items-center">
+                  <div className="order-2 flex flex-col gap-4 lg:order-2">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="metric-card">
+                        <span className="metric-label">Entries</span>
+                        <span className="metric-value">{history.length}</span>
+                      </div>
+                      <div className="metric-card">
+                        <span className="metric-label">This Week</span>
+                        <span className="metric-value">{entriesThisWeek}</span>
+                      </div>
+                      <div className="metric-card">
+                        <span className="metric-label">This Month</span>
+                        <span className="metric-value">{entriesThisMonth}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="order-1 space-y-5 lg:order-1">
                     <p className="eyebrow">Daily Reflection</p>
                     <h2 className="page-title max-w-3xl">{greeting}</h2>
 
@@ -337,70 +354,53 @@ function App() {
                       </button>
                     </div>
                   </div>
-
-                  <div className="flex flex-wrap gap-3">
-                    <div className="metric-card">
-                      <span className="metric-label">Entries</span>
-                      <span className="metric-value">{history.length}</span>
-                    </div>
-                    <div className="metric-card">
-                      <span className="metric-label">This Week</span>
-                      <span className="metric-value">{entriesThisWeek}</span>
-                    </div>
-                    <div className="metric-card">
-                      <span className="metric-label">This Month</span>
-                      <span className="metric-value">{entriesThisMonth}</span>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-5 lg:grid-cols-2">
-                    <Heatmap entries={history} />
-                    <MoodLineChart entries={history} />
-                  </div>
                 </div>
 
-                <div className="flex flex-col gap-4">
-                  <div className="app-panel rounded-[28px] p-5 sm:p-6">
-                    <div className="flex items-start gap-3">
-                      <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                        <Calendar size={18} />
-                      </span>
-                      <div>
-                        <h3 className="mt-2 text-xl font-semibold text-[var(--text)]">Recent Entries</h3>
-                      </div>
-                    </div>
+                <div className="grid gap-5 lg:grid-cols-2">
+                  <Heatmap entries={history} />
+                  <MoodLineChart entries={history} />
+                </div>
 
-                    {recentEntries.length > 0 ? (
-                      <div className="mt-5 space-y-3">
-                        {recentEntries.map((entry) => (
-                          <button
-                            key={entry.id}
-                            onClick={() => handleSelectEntry(entry)}
-                            className="w-full rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.58)] p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-[rgba(255,255,255,0.82)]"
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="truncate text-sm font-semibold text-[var(--text)]">
-                                {entry.title || "Untitled entry"}
-                              </span>
-                              <span className="text-xs text-[var(--muted)]">
-                                {new Date(entry.created_at).toLocaleDateString(undefined, {
-                                  month: "short",
-                                  day: "numeric",
-                                })}
-                              </span>
-                            </div>
-                            <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--muted)]">
-                              {entry.preview || "Open entry"}
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="mt-5 rounded-[22px] border border-dashed border-[var(--line)] bg-[rgba(255,255,255,0.42)] p-5">
-                        <p className="text-sm leading-7 text-[var(--muted)]">No entries yet.</p>
-                      </div>
-                    )}
+                <div className="app-panel rounded-[28px] p-5 sm:p-6">
+                  <div className="flex items-start gap-3">
+                    <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                      <Calendar size={18} />
+                    </span>
+                    <div>
+                      <h3 className="mt-2 text-xl font-semibold text-[var(--text)]">Recent Entries</h3>
+                    </div>
                   </div>
+
+                  {recentEntries.length > 0 ? (
+                    <div className="mt-5 grid gap-3 md:grid-cols-3">
+                      {recentEntries.map((entry) => (
+                        <button
+                          key={entry.id}
+                          onClick={() => handleSelectEntry(entry)}
+                          className="w-full rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.58)] p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-[rgba(255,255,255,0.82)]"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="truncate text-sm font-semibold text-[var(--text)]">
+                              {entry.title || "Untitled entry"}
+                            </span>
+                            <span className="shrink-0 text-xs text-[var(--muted)]">
+                              {new Date(entry.created_at).toLocaleDateString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </span>
+                          </div>
+                          <p className="mt-2 line-clamp-2 text-sm leading-6 text-[var(--muted)]">
+                            {entry.preview || "Open entry"}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-5 rounded-[22px] border border-dashed border-[var(--line)] bg-[rgba(255,255,255,0.42)] p-5">
+                      <p className="text-sm leading-7 text-[var(--muted)]">No entries yet.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
