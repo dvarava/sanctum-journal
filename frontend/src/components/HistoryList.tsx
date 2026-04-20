@@ -1,12 +1,13 @@
-import { ArrowRight, Calendar, FileText } from "lucide-react";
+import { ArrowRight, Calendar, FileText, PenLine } from "lucide-react";
 import { main } from "../../wailsjs/go/models";
 
 interface HistoryListProps {
     entries: main.Entry[];
     onSelectEntry: (entry: main.Entry) => void;
+    onCreateEntry: () => void;
 }
 
-export function HistoryList({ entries, onSelectEntry }: HistoryListProps) {
+export function HistoryList({ entries, onSelectEntry, onCreateEntry }: HistoryListProps) {
     const currentDate = new Date();
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 6);
@@ -21,9 +22,9 @@ export function HistoryList({ entries, onSelectEntry }: HistoryListProps) {
     }).length;
 
     return (
-        <div className="page-shell enter-soft">
-            <section className="app-panel-strong rounded-[32px] p-6 sm:p-8">
-                <div className="flex flex-col gap-8">
+        <div className="page-shell enter-soft flex min-h-screen flex-col !py-6 sm:!py-8">
+            <section className="app-panel-strong flex min-h-0 flex-1 flex-col rounded-[32px] p-6 sm:p-8">
+                <div className="flex min-h-0 flex-1 flex-col gap-8">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <p className="eyebrow">Archive</p>
@@ -47,10 +48,18 @@ export function HistoryList({ entries, onSelectEntry }: HistoryListProps) {
                     </div>
 
                     {entries.length === 0 ? (
-                        <div className="rounded-[26px] border border-dashed border-[var(--line)] bg-[rgba(255,255,255,0.46)] px-6 py-16 text-center">
-                            <p className="mx-auto max-w-md text-sm leading-7 text-[var(--muted)]">
-                                No entries yet. Your archive will begin the moment you save your first reflection.
+                        <div className="flex min-h-[34rem] flex-1 flex-col items-center justify-center rounded-[28px] border border-dashed border-[var(--line-strong)] bg-[rgba(255,255,255,0.5)] px-6 py-16 text-center sm:px-8">
+                            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[1.25rem] border border-[rgba(93,117,99,0.14)] bg-[rgba(238,244,238,0.84)] text-[var(--accent-strong)]">
+                                <FileText size={22} />
+                            </div>
+                            <h3 className="mt-5 text-xl font-semibold text-[var(--text)]">No saved reflections yet</h3>
+                            <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[var(--muted)]">
+                                Your archive will begin the moment you save your first entry. Each saved reflection appears here with its date, preview, and emotional tags.
                             </p>
+                            <button type="button" onClick={onCreateEntry} className="action-primary mt-6 px-5 py-3">
+                                <PenLine size={16} />
+                                Start writing
+                            </button>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

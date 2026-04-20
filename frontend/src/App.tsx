@@ -359,7 +359,7 @@ function App() {
           />
         );
       case "history":
-        return <HistoryList entries={history} onSelectEntry={handleSelectEntry} />;
+        return <HistoryList entries={history} onSelectEntry={handleSelectEntry} onCreateEntry={handleNewEntry} />;
 
       case "home":
         const hour = new Date().getHours();

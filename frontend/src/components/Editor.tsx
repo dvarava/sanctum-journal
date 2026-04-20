@@ -50,8 +50,8 @@ export function Editor({
     };
 
     return (
-        <div className="page-shell enter-soft">
-            <section className="app-panel-strong flex min-h-[70vh] flex-col rounded-[32px] p-4 sm:min-h-[76vh] sm:p-6">
+        <div className="page-shell enter-soft flex min-h-screen flex-col !py-6 sm:!py-8">
+            <section className="app-panel-strong flex min-h-0 flex-1 flex-col rounded-[32px] p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-4 px-2 pb-4 sm:px-3">
                     <div className="min-w-0 flex-1">
                         <p className="eyebrow">{dateStr}</p>
