@@ -26,6 +26,8 @@ export function GetAnalysisAudit(arg1:number):Promise<Array<main.AnalysisAuditEv
 
 export function GetEntries():Promise<Array<main.Entry>>;
 
+export function GetSanctumDirectory():Promise<string>;
+
 export function GetSettings():Promise<main.Settings>;
 
 export function GetVaultStatus():Promise<main.VaultStatus>;

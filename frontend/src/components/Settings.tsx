@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Settings as SettingsIcon, Brain, Gauge, Cpu, User, Shield, Check, FolderOpen, Download, AlertTriangle, KeyRound, Lock } from 'lucide-react';
-import { CancelPullModel, ChangeVaultPassword, GetAnalysisAudit, GetSettings, IsOllamaRunning, ListModels, LockVault, PullModel, SaveSettings } from '../../wailsjs/go/main/App';
+import { AlertTriangle, Brain, Check, Cpu, Download, KeyRound, Lock, Settings as SettingsIcon, Shield } from 'lucide-react';
+import { CancelPullModel, ChangeVaultPassword, GetAnalysisAudit, GetSanctumDirectory, GetSettings, IsOllamaRunning, ListModels, LockVault, PullModel, SaveSettings } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
 import { main } from '../../wailsjs/go/models';
 
@@ -9,30 +9,15 @@ interface SettingsProps {
 }
 
 const coachingStyles = [
-    {
-        id: 'compassionate',
-        label: 'Compassionate',
-        description: 'Warm and validating',
-        emoji: '💛',
-    },
-    {
-        id: 'direct',
-        label: 'Direct',
-        description: 'Clear and concise',
-        emoji: '🎯',
-    },
-    {
-        id: 'socratic',
-        label: 'Socratic',
-        description: 'Question-led',
-        emoji: '🧠',
-    },
-    {
-        id: 'motivational',
-        label: 'Motivational',
-        description: 'Upbeat and energising',
-        emoji: '🔥',
-    },
+    { id: 'compassionate', label: 'Compassionate', description: 'Warm and validating' },
+    { id: 'direct', label: 'Direct', description: 'Clear and concise' },
+    { id: 'socratic', label: 'Socratic', description: 'Question-led' },
+    { id: 'motivational', label: 'Motivational', description: 'Upbeat and energising' },
+];
+
+const analysisDepths = [
+    { id: 'brief', label: 'Brief', description: 'One concise reframe' },
+    { id: 'detailed', label: 'Detailed', description: 'More context and nuance' },
 ];
 
 const availableModels = [
@@ -51,8 +36,8 @@ const emoModels = [
 
 const crisisRegions = [
     { id: 'global', label: 'Global', description: 'International directory' },
-    { id: 'us', label: 'United States', description: '988 and text support' },
-    { id: 'uk_ie', label: 'UK / Ireland', description: 'Samaritans and global directory' },
+    { id: 'us', label: 'United States', description: '988 & text support' },
+    { id: 'uk_ie', label: 'UK / Ireland', description: 'Samaritans & global directory' },
 ];
 
 type PullProgressEvent = {
@@ -114,9 +99,43 @@ const isCancelError = (message: string) => {
     return normalized.includes("canceled") || normalized.includes("cancelled") || normalized.includes("context canceled");
 };
 
-const modelPillClass = "pill-chip min-w-[7.5rem] justify-center";
-const compactModelButtonClass = `${modelPillClass} bg-[rgba(255,255,255,0.72)] text-[var(--accent-strong)] transition-all hover:bg-[rgba(255,255,255,0.9)] disabled:cursor-not-allowed disabled:opacity-55`;
-const installModelButtonClass = `${modelPillClass} border-[rgba(65,82,71,0.2)] bg-[#415247] !text-[#f8f7f2] !shadow-none transition-all hover:bg-[#536b59] disabled:cursor-not-allowed disabled:opacity-100 [&_svg]:!text-[#f8f7f2]`;
+const compactOptionClass = (selected: boolean) =>
+    `flex min-h-11 w-full items-center justify-between gap-2 rounded-[20px] border px-3 py-2 text-left transition-colors ${
+        selected
+            ? "border-[var(--accent)] bg-white"
+            : "border-[var(--line)] bg-transparent hover:bg-[rgba(255,255,255,0.55)]"
+    }`;
+
+const sectionClass = "border-t border-[var(--line)] px-5 py-5 sm:px-6";
+const fieldRowClass = "grid gap-2 sm:grid-cols-[10.5rem_minmax(0,1fr)] sm:items-start";
+const selectClass = "soft-input min-h-11 py-2.5 text-sm";
+
+function SettingsSection({ icon, title, note, children }: { icon: React.ReactNode; title: string; note?: string; children: React.ReactNode }) {
+    return (
+        <section className={sectionClass}>
+            <div className="mb-4 flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                    {icon}
+                    <h3 className="text-base font-semibold text-[var(--text)]">{title}</h3>
+                </div>
+                {note && <p className="max-w-3xl text-sm leading-6 text-[var(--muted)]">{note}</p>}
+            </div>
+            <div className="grid gap-4">{children}</div>
+        </section>
+    );
+}
+
+function SettingRow({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
+    return (
+        <div className={fieldRowClass}>
+            <div>
+                <p className="text-sm font-semibold text-[var(--text)]">{label}</p>
+                {note && <p className="mt-1 text-xs leading-5 text-[var(--muted)]">{note}</p>}
+            </div>
+            <div>{children}</div>
+        </div>
+    );
+}
 
 export function Settings({ onLock }: SettingsProps) {
     const [coachingStyle, setCoachingStyle] = useState('compassionate');
@@ -125,6 +144,7 @@ export function Settings({ onLock }: SettingsProps) {
     const [emotionModel, setEmotionModel] = useState('default');
     const [userName, setUserName] = useState('');
     const [crisisRegion, setCrisisRegion] = useState('global');
+    const [storageLocation, setStorageLocation] = useState('');
     const [auditEvents, setAuditEvents] = useState<main.AnalysisAuditEvent[]>([]);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -177,7 +197,6 @@ export function Settings({ onLock }: SettingsProps) {
         return latestModels;
     };
 
-    // load settings on mount
     useEffect(() => {
         (async () => {
             try {
@@ -188,6 +207,7 @@ export function Settings({ onLock }: SettingsProps) {
                 setEmotionModel(canonicalModelName(s.emotion_model || 'default'));
                 setUserName(s.user_name || '');
                 setCrisisRegion(s.crisis_region || 'global');
+                setStorageLocation(await GetSanctumDirectory());
                 setAuditEvents((await GetAnalysisAudit(8)) || []);
             } catch { }
             await refreshModelStatus();
@@ -330,9 +350,9 @@ export function Settings({ onLock }: SettingsProps) {
     const renderModelInstallPanel = (targetModel: string, label: string) => {
         if (!targetModel || targetModel === "default") {
             return (
-                <div className="app-panel-muted rounded-[24px] p-4 text-sm leading-7 text-[var(--muted-strong)]">
+                <p className="mt-2 text-xs leading-5 text-[var(--muted-strong)]">
                     The base model will handle emotion analysis.
-                </div>
+                </p>
             );
         }
 
@@ -340,11 +360,11 @@ export function Settings({ onLock }: SettingsProps) {
         const isInstalling = installingModel === targetModel;
 
         return (
-            <div className="app-panel-muted rounded-[24px] p-4">
+            <div className="mt-2 rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.42)] px-3 py-2.5">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <p className="text-sm font-semibold text-[var(--text)]">{label}</p>
-                        <p className="mt-1 text-xs leading-6 text-[var(--muted-strong)]">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">{label}</p>
+                        <p className="mt-1 text-sm leading-5 text-[var(--muted-strong)]">
                             {ollamaRunning === false
                                 ? "Ollama is not running."
                                 : isInstalled
@@ -354,25 +374,25 @@ export function Settings({ onLock }: SettingsProps) {
                     </div>
 
                     {isInstalled ? (
-                        <span className={`${modelPillClass} bg-[rgba(238,244,238,0.92)] text-[var(--accent-strong)]`}>
-                            <Check size={14} />
+                        <span className="inline-flex h-8 items-center justify-center gap-2 rounded-full border border-[var(--line)] bg-white px-2.5 text-xs font-semibold text-[var(--accent-strong)]">
+                            <Check size={13} />
                             Installed
                         </span>
                     ) : ollamaRunning === false ? (
-                        <button type="button" onClick={refreshModelStatus} disabled={checkingModels} className={compactModelButtonClass}>
+                        <button type="button" onClick={refreshModelStatus} disabled={checkingModels} className="action-secondary h-8 px-3 py-0 text-xs">
                             Check models
                         </button>
                     ) : isInstalling ? (
                         <div className="flex flex-wrap gap-2 sm:justify-end">
-                            <button type="button" disabled className={installModelButtonClass}>
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#f8f7f2] border-t-transparent" />
+                            <button type="button" disabled className="action-primary h-8 px-3 py-0 text-xs disabled:cursor-not-allowed disabled:opacity-80">
+                                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#f8f7f2] border-t-transparent" />
                                 Installing...
                             </button>
                             <button
                                 type="button"
                                 onClick={() => handleCancelInstall(targetModel)}
                                 disabled={cancelingModel === targetModel}
-                                className={compactModelButtonClass}
+                                className="action-secondary h-8 px-3 py-0 text-xs disabled:cursor-not-allowed disabled:opacity-55"
                             >
                                 {cancelingModel === targetModel ? "Canceling..." : "Cancel"}
                             </button>
@@ -382,16 +402,16 @@ export function Settings({ onLock }: SettingsProps) {
                             type="button"
                             onClick={() => handleInstallModel(targetModel)}
                             disabled={isInstalling || Boolean(installingModel) || checkingModels}
-                            className={installModelButtonClass}
+                            className="action-primary h-8 px-3 py-0 text-xs disabled:cursor-not-allowed disabled:opacity-55"
                         >
-                            <Download size={14} />
+                            <Download size={13} />
                             Install
                         </button>
                     )}
                 </div>
 
                 {isInstalling && (
-                    <div className="mt-4">
+                    <div className="mt-3">
                         <div className="flex items-center justify-between gap-3">
                             <p className="text-xs font-semibold text-[var(--muted-strong)]">
                                 {installStatus || "Downloading model files..."}
@@ -400,7 +420,7 @@ export function Settings({ onLock }: SettingsProps) {
                                 <p className="text-xs font-semibold text-[var(--muted)]">{installProgress}%</p>
                             )}
                         </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-[rgba(93,117,99,0.14)]">
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[rgba(93,117,99,0.14)]">
                             <div
                                 className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
                                 style={{ width: `${installProgress ?? 18}%` }}
@@ -410,21 +430,16 @@ export function Settings({ onLock }: SettingsProps) {
                 )}
 
                 {installFeedbackModel === targetModel && installError && (
-                    <div className="mt-4 rounded-[20px] border border-[rgba(177,95,78,0.22)] bg-[rgba(245,225,221,0.86)] p-4 text-sm leading-7 text-[#8a5f42]">
-                        <div className="flex items-start gap-3">
-                            <AlertTriangle className="mt-1 shrink-0 text-[#9a5d4d]" size={18} />
-                            <div>
-                                <p>{installError}</p>
-                                <button type="button" onClick={refreshModelStatus} className="action-secondary mt-3 inline-flex">
-                                    Check models
-                                </button>
-                            </div>
-                        </div>
+                    <div className="mt-3 rounded-[22px] border border-[rgba(177,95,78,0.22)] bg-[rgba(245,225,221,0.42)] p-3 text-sm leading-6 text-[#8a5f42]">
+                        <p>{installError}</p>
+                        <button type="button" onClick={refreshModelStatus} className="action-secondary mt-3 h-8 px-3 py-0 text-xs">
+                            Check models
+                        </button>
                     </div>
                 )}
 
                 {installFeedbackModel === targetModel && installStatus && !installingModel && !installError && (
-                    <div className="mt-4 rounded-[20px] border border-[rgba(93,117,99,0.16)] bg-[rgba(238,244,238,0.92)] p-4 text-sm leading-7 text-[var(--accent-strong)]">
+                    <div className="mt-3 rounded-[22px] border border-[var(--line)] bg-white p-3 text-sm leading-6 text-[var(--accent-strong)]">
                         {installStatus}
                     </div>
                 )}
@@ -435,233 +450,138 @@ export function Settings({ onLock }: SettingsProps) {
     if (loading) {
         return (
             <div className="page-shell">
-                <div className="app-panel-strong flex min-h-[260px] items-center justify-center rounded-[32px]">
+                <div className="app-panel-strong flex min-h-[220px] items-center justify-center rounded-[32px]">
                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
                 </div>
             </div>
         );
     }
 
+    const selectedPrimaryModel = availableModels.find((model) => model.id === modelName);
+    const selectedEmotionModel = emoModels.find((model) => model.id === emotionModel);
+    const ollamaStatus = checkingModels
+        ? "Checking..."
+        : ollamaRunning === false
+            ? "Not running"
+            : "Ready";
+
     return (
         <div className="page-shell enter-soft">
-            <div className="flex flex-col gap-6">
-                <section className="app-panel-strong rounded-[32px] p-6 sm:p-8">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                        <div className="flex items-start gap-4">
-                    
-                            <div className="max-w-2xl">
-                                <p className="eyebrow">Preferences</p>
-                                <h2 className="page-title mt-3">Shape the tone of your journal</h2>
-                            </div>
+            <section className="app-panel-strong overflow-hidden rounded-[32px]">
+                <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-center gap-3">
+                        <span className="icon-badge h-10 w-10 rounded-[1rem] shadow-none">
+                            <SettingsIcon size={18} />
+                        </span>
+                        <div>
+                            <p className="eyebrow">Preferences</p>
+                            <h2 className="text-2xl font-semibold text-[var(--text)]">Settings</h2>
                         </div>
-
-                        <button onClick={handleSave} className={saved ? "action-secondary" : "action-primary"}>
-                            {saved ? "Settings saved" : "Save settings"}
-                        </button>
                     </div>
-                </section>
 
-                <div className="grid gap-6 xl:grid-cols-2">
-                    <section className="app-panel rounded-[30px] p-6">
-                        <div className="flex items-center gap-3">
-                            <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                                <User size={18} />
-                            </span>
-                            <div>
-                                <p className="eyebrow">Profile</p>
-                                <h3 className="text-xl font-semibold text-[var(--text)]">Personal details</h3>
-                            </div>
-                        </div>
+                    <button onClick={handleSave} className={`${saved ? "action-secondary" : "action-primary"} px-4 py-2 text-sm`}>
+                        {saved ? "Settings saved" : "Save settings"}
+                    </button>
+                </div>
 
-                        <div className="mt-5">
-                            <label className="eyebrow">Display Name</label>
-                            <input
-                                type="text"
-                                value={userName}
-                                onChange={(e) => setUserName(e.target.value)}
-                                placeholder="Enter your name for personalized greetings"
-                                className="soft-input mt-2"
-                            />
-                        </div>
+                <div className="grid lg:grid-cols-[minmax(0,1fr)_22rem]">
+                    <main className="min-w-0">
+                        <SettingsSection
+                            icon={<Brain size={16} className="text-[var(--accent-strong)]" />}
+                            title="Profile & Reflection"
+                            note="Keep the journal response personal without making the writing flow heavier."
+                        >
+                            <SettingRow label="Display name" note="Shown in greetings and coaching copy.">
+                                <input
+                                    type="text"
+                                    value={userName}
+                                    onChange={(e) => setUserName(e.target.value)}
+                                    placeholder="Enter your name"
+                                    className={selectClass}
+                                />
+                            </SettingRow>
 
-                        <div className="mt-8">
-                            <div className="flex items-center gap-3">
-                                <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                                    <Brain size={18} />
-                                </span>
-                                <div>
-                                    <p className="eyebrow">Coaching Style</p>
-                                </div>
-                            </div>
-
-                            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                                {coachingStyles.map((style) => (
-                                    <button
-                                        key={style.id}
-                                        onClick={() => setCoachingStyle(style.id)}
-                                        className={`rounded-[24px] border p-4 text-left transition-all ${
-                                            coachingStyle === style.id
-                                                ? "border-[rgba(93,117,99,0.26)] bg-[rgba(238,244,238,0.92)] shadow-[0_16px_30px_rgba(65,82,71,0.08)]"
-                                                : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
-                                        }`}
-                                    >
-                                        <div className="flex items-start justify-between gap-3">
+                            <SettingRow label="Coaching style" note="Controls the tone of the AI reflection.">
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {coachingStyles.map((style) => (
+                                        <button key={style.id} onClick={() => setCoachingStyle(style.id)} className={compactOptionClass(coachingStyle === style.id)}>
                                             <div>
                                                 <p className="text-sm font-semibold text-[var(--text)]">{style.label}</p>
-                                                <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
-                                                    {style.description}
-                                                </p>
+                                                <p className="text-[11px] leading-4 text-[var(--muted)]">{style.description}</p>
                                             </div>
-                                            {coachingStyle === style.id && (
-                                                <Check size={16} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
-                                            )}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-
-                    <section className="app-panel rounded-[30px] p-6">
-                            <div className="flex items-center gap-3">
-                                <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                                    <Gauge size={18} />
-                                </span>
-                                <div>
-                                    <p className="eyebrow">Analysis</p>
-                                    <h3 className="text-xl font-semibold text-[var(--text)]">Depth</h3>
-                                </div>
-                            </div>
-
-                        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                            <button
-                                onClick={() => setAnalysisDepth("brief")}
-                                className={`rounded-[24px] border p-4 text-left transition-all ${
-                                    analysisDepth === "brief"
-                                        ? "border-[rgba(93,117,99,0.26)] bg-[rgba(238,244,238,0.92)] shadow-[0_16px_30px_rgba(65,82,71,0.08)]"
-                                        : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
-                                }`}
-                            >
-                                <p className="text-sm font-semibold text-[var(--text)]">Brief</p>
-                                <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
-                                    One concise cognitive reframe.
-                                </p>
-                            </button>
-
-                            <button
-                                onClick={() => setAnalysisDepth("detailed")}
-                                className={`rounded-[24px] border p-4 text-left transition-all ${
-                                    analysisDepth === "detailed"
-                                        ? "border-[rgba(93,117,99,0.26)] bg-[rgba(238,244,238,0.92)] shadow-[0_16px_30px_rgba(65,82,71,0.08)]"
-                                        : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
-                                }`}
-                            >
-                                <p className="text-sm font-semibold text-[var(--text)]">Detailed</p>
-                                <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
-                                    A fuller reflection with suggestions and nuance.
-                                </p>
-                            </button>
-                        </div>
-
-                        <div className="app-panel-muted mt-8 rounded-[28px] p-5">
-                            <p className="eyebrow">Current</p>
-                            <p className="mt-3 text-lg font-semibold text-[var(--text)]">
-                                {analysisDepth === "brief" ? "Short reframe" : "Longer reflection"}
-                            </p>
-                            <p className="mt-2 text-sm leading-7 text-[var(--muted-strong)]">
-                                {analysisDepth === "brief"
-                                    ? "A quicker response after each analysis."
-                                    : "More context and a fuller response."}
-                            </p>
-                        </div>
-                    </section>
-
-                    <section className="app-panel rounded-[30px] p-6 xl:col-span-2">
-                        <div className="flex items-center gap-3">
-                            <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                                <AlertTriangle size={18} />
-                            </span>
-                            <div>
-                                <p className="eyebrow">Safety</p>
-                                <h3 className="text-xl font-semibold text-[var(--text)]">Crisis resources</h3>
-                            </div>
-                        </div>
-
-                        <div className="mt-5 grid gap-3 md:grid-cols-3">
-                            {crisisRegions.map((region) => (
-                                <button
-                                    key={region.id}
-                                    onClick={() => setCrisisRegion(region.id)}
-                                    className={`rounded-[24px] border p-4 text-left transition-all ${
-                                        crisisRegion === region.id
-                                            ? "border-[rgba(177,95,78,0.28)] bg-[rgba(245,225,221,0.82)] shadow-[0_16px_30px_rgba(144,86,72,0.08)]"
-                                            : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
-                                    }`}
-                                >
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div>
-                                            <p className="text-sm font-semibold text-[var(--text)]">{region.label}</p>
-                                            <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
-                                                {region.description}
-                                            </p>
-                                        </div>
-                                        {crisisRegion === region.id && (
-                                            <Check size={16} className="mt-0.5 shrink-0 text-[#8a5f42]" />
-                                        )}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-
-                        <p className="mt-4 text-xs leading-6 text-[var(--muted-strong)]">
-                            Crisis checks stay on this device. The selected region only changes which support contacts are shown.
-                        </p>
-                    </section>
-
-                    <section className="app-panel rounded-[30px] p-6 xl:col-span-2">
-                        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
-                            <div>
-                                <div className="flex items-center gap-3">
-                                    <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                                        <Cpu size={18} />
-                                    </span>
-                                    <div>
-                                        <p className="eyebrow">Primary Model</p>
-                                        <h3 className="text-xl font-semibold text-[var(--text)]">AI setup</h3>
-                                    </div>
-                                </div>
-
-                                <div className="mt-5 flex flex-col gap-3">
-                                    {availableModels.map((model) => (
-                                        <button
-                                            key={model.id}
-                                            onClick={() => setModelName(model.id)}
-                                            className={`rounded-[24px] border p-4 text-left transition-all ${
-                                                modelName === model.id
-                                                    ? "border-[rgba(93,117,99,0.26)] bg-[rgba(238,244,238,0.92)] shadow-[0_16px_30px_rgba(65,82,71,0.08)]"
-                                                    : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
-                                            }`}
-                                        >
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div>
-                                                    <p className="font-mono text-sm font-semibold text-[var(--text)]">
-                                                        {model.label}
-                                                    </p>
-                                                    <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
-                                                        {model.description}
-                                                    </p>
-                                                </div>
-                                                {modelName === model.id && (
-                                                    <Check size={16} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
-                                                )}
-                                            </div>
+                                            {coachingStyle === style.id && <Check size={15} className="shrink-0 text-[var(--accent-strong)]" />}
                                         </button>
                                     ))}
                                 </div>
+                            </SettingRow>
 
-                                <div className="mt-4 flex flex-col gap-3">
+                            <SettingRow label="Analysis depth" note="Sets how much detail appears in each response.">
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {analysisDepths.map((depth) => (
+                                        <button key={depth.id} onClick={() => setAnalysisDepth(depth.id)} className={compactOptionClass(analysisDepth === depth.id)}>
+                                            <div>
+                                                <p className="text-sm font-semibold text-[var(--text)]">{depth.label}</p>
+                                                <p className="text-[11px] leading-4 text-[var(--muted)]">{depth.description}</p>
+                                            </div>
+                                            {analysisDepth === depth.id && <Check size={15} className="shrink-0 text-[var(--accent-strong)]" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </SettingRow>
+                        </SettingsSection>
+
+                        <SettingsSection
+                            icon={<AlertTriangle size={16} className="text-[var(--accent-strong)]" />}
+                            title="Safety"
+                            note="Crisis checks stay on this device. The region only changes which support contacts are shown."
+                        >
+                            <SettingRow label="Resource region" note="Used when Sanctum pauses analysis and shows support options.">
+                                <div className="grid gap-2 md:grid-cols-3">
+                                    {crisisRegions.map((region) => (
+                                        <button key={region.id} onClick={() => setCrisisRegion(region.id)} className={compactOptionClass(crisisRegion === region.id)}>
+                                            <div>
+                                                <p className="text-sm font-semibold text-[var(--text)]">{region.label}</p>
+                                                <p className="text-[11px] leading-4 text-[var(--muted)]">{region.description}</p>
+                                            </div>
+                                            {crisisRegion === region.id && <Check size={15} className="shrink-0 text-[var(--accent-strong)]" />}
+                                        </button>
+                                    ))}
+                                </div>
+                            </SettingRow>
+                        </SettingsSection>
+
+                        <SettingsSection
+                            icon={<Cpu size={16} className="text-[var(--accent-strong)]" />}
+                            title="Local AI"
+                            note="Choose the Ollama models used for reflections and optional emotion analysis."
+                        >
+                            <SettingRow label="Ollama status" note="Sanctum only checks the local service.">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <span className={`inline-flex h-9 w-fit items-center rounded-full border px-3 text-xs font-semibold ${ollamaRunning === false
+                                        ? "border-[rgba(177,95,78,0.22)] bg-[rgba(245,225,221,0.35)] text-[#8a5f42]"
+                                        : checkingModels
+                                            ? "border-[var(--line)] bg-white text-[var(--muted-strong)]"
+                                            : "border-[rgba(93,117,99,0.18)] bg-[rgba(238,244,238,0.95)] text-[var(--accent-strong)]"
+                                        }`}>
+                                        {ollamaStatus}
+                                    </span>
+                                    <button type="button" onClick={refreshModelStatus} disabled={checkingModels} className="action-secondary h-9 px-3 py-0 text-xs disabled:cursor-not-allowed disabled:opacity-55">
+                                        Check models
+                                    </button>
+                                </div>
+                            </SettingRow>
+
+                            <SettingRow label="Primary model" note={selectedPrimaryModel?.description || "Selected local reflection model."}>
+                                <select value={modelName} onChange={(e) => setModelName(e.target.value)} className={selectClass}>
+                                    {availableModels.map((model) => (
+                                        <option key={model.id} value={model.id}>
+                                            {model.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <div>
                                     {checkingModels ? (
-                                        <div className="app-panel-muted rounded-[24px] p-4">
+                                        <div className="mt-2 rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.42)] px-3 py-2.5">
                                             <div className="flex items-center gap-3 text-sm font-semibold text-[var(--muted-strong)]">
                                                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
                                                 Checking installed models...
@@ -671,193 +591,157 @@ export function Settings({ onLock }: SettingsProps) {
                                         renderModelInstallPanel(modelName, "Selected primary model")
                                     )}
                                 </div>
+                            </SettingRow>
+
+                            <SettingRow label="Emotion model" note={selectedEmotionModel?.description || "Optional separate emotion model."}>
+                                <select value={emotionModel} onChange={(e) => setEmotionModel(e.target.value)} className={selectClass}>
+                                    {emoModels.map((model) => (
+                                        <option key={model.id} value={model.id}>
+                                            {model.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                {emotionModel !== "default" && renderModelInstallPanel(emotionModel, "Selected emotion model")}
+                            </SettingRow>
+                        </SettingsSection>
+                    </main>
+
+                    <aside className="min-w-0 border-t border-[var(--line)] bg-[rgba(255,255,255,0.24)] lg:border-l lg:border-t-0">
+                        <section className="px-5 py-5 sm:px-6">
+                            <div className="flex items-center gap-2">
+                                <KeyRound size={16} className="text-[var(--accent-strong)]" />
+                                <h3 className="text-base font-semibold text-[var(--text)]">Vault Access</h3>
+                            </div>
+                            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Change the vault password or lock the journal.</p>
+
+                            <div className="mt-3 grid gap-3">
+                                <input
+                                    type="password"
+                                    value={currentPassword}
+                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                    placeholder="Current password"
+                                    className={selectClass}
+                                    autoComplete="current-password"
+                                />
+                                <input
+                                    type="password"
+                                    value={newPassword}
+                                    onChange={(e) => setNewPassword(e.target.value)}
+                                    placeholder="New password"
+                                    className={selectClass}
+                                    autoComplete="new-password"
+                                />
+                                <input
+                                    type="password"
+                                    value={confirmNewPassword}
+                                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                    placeholder="Confirm new password"
+                                    className={selectClass}
+                                    autoComplete="new-password"
+                                />
                             </div>
 
-                            <div className="flex flex-col gap-5">
-                                <div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="icon-badge h-11 w-11 rounded-[1rem] bg-[linear-gradient(145deg,rgba(128,151,171,0.22),rgba(255,255,255,0.46))]">
-                                            <Brain size={18} />
-                                        </span>
-                                        <div>
-                                            <p className="eyebrow">Emotion Model</p>
-                                        </div>
-                                    </div>
+                            {passwordFeedback && (
+                                <div className="mt-3 rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.52)] p-3 text-sm leading-6 text-[var(--muted-strong)]">
+                                    {passwordFeedback}
+                                </div>
+                            )}
 
-                                    <div className="mt-5 flex flex-col gap-3">
-                                        {emoModels.map((model) => (
-                                            <button
-                                                key={model.id}
-                                                onClick={() => setEmotionModel(model.id)}
-                                                className={`rounded-[24px] border p-4 text-left transition-all ${
-                                                    emotionModel === model.id
-                                                        ? "border-[rgba(118,136,154,0.22)] bg-[rgba(233,240,245,0.92)] shadow-[0_16px_30px_rgba(67,83,96,0.08)]"
-                                                        : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
-                                                }`}
-                                            >
-                                                <div className="flex items-start justify-between gap-4">
-                                                    <div>
-                                                        <p className="font-mono text-sm font-semibold text-[var(--text)]">
-                                                            {model.label}
-                                                        </p>
-                                                        <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
-                                                            {model.description}
-                                                        </p>
-                                                    </div>
-                                                    {emotionModel === model.id && (
-                                                        <Check size={16} className="mt-0.5 shrink-0 text-[#4d6475]" />
-                                                    )}
+                            <div className="mt-4 grid gap-2">
+                                <button
+                                    type="button"
+                                    onClick={handleChangePassword}
+                                    disabled={changingPassword || !currentPassword || !newPassword || !confirmNewPassword}
+                                    className="action-primary h-11 w-full justify-center whitespace-nowrap px-4 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+                                >
+                                    {changingPassword ? (
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#f8f7f2] border-t-transparent" />
+                                    ) : (
+                                        <KeyRound size={16} />
+                                    )}
+                                    {changingPassword ? "Changing..." : "Change password"}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleLockVault}
+                                    disabled={lockingVault}
+                                    className="action-secondary h-11 w-full justify-center whitespace-nowrap px-4 py-0 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+                                >
+                                    {lockingVault ? (
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+                                    ) : (
+                                        <Lock size={16} />
+                                    )}
+                                    {lockingVault ? "Locking..." : "Lock now"}
+                                </button>
+                            </div>
+                        </section>
+
+                        <section className="border-t border-[var(--line)] px-5 py-5 sm:px-6">
+                            <div className="flex items-center gap-2">
+                                <Shield size={16} className="text-[var(--accent-strong)]" />
+                                <h3 className="text-base font-semibold text-[var(--text)]">Privacy</h3>
+                            </div>
+                            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Journal text stays encrypted locally; the ledger stores metadata only.</p>
+
+                            <dl className="mt-3 divide-y divide-[var(--line)] rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.36)]">
+                                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                                    <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Encryption</dt>
+                                    <dd className="text-sm font-semibold text-[var(--text)]">AES-256-GCM</dd>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                                    <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Telemetry</dt>
+                                    <dd className="text-sm font-semibold text-[var(--text)]">None</dd>
+                                </div>
+                                <div className="flex items-start justify-between gap-3 px-3 py-2.5">
+                                    <dt className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Storage</dt>
+                                    <dd className="min-w-0 break-all text-right font-mono text-xs font-semibold leading-5 text-[var(--text)]" title={storageLocation || "Storage location unavailable"}>
+                                        {storageLocation || "Storage location unavailable"}
+                                    </dd>
+                                </div>
+                            </dl>
+
+                            <div className="mt-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <h4 className="text-sm font-semibold text-[var(--text)]">Privacy ledger</h4>
+                                    <span className="text-xs text-[var(--muted)]">{auditEvents.length} recent</span>
+                                </div>
+
+                                {auditEvents.length === 0 ? (
+                                    <div className="mt-2 rounded-[22px] border border-dashed border-[var(--line)] bg-[rgba(255,255,255,0.28)] p-3">
+                                        <p className="text-sm leading-6 text-[var(--muted-strong)]">
+                                            No AI analysis events have been recorded yet.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 max-h-[20rem] overflow-y-auto rounded-[22px] border border-[var(--line)] bg-[rgba(255,255,255,0.34)]">
+                                        {auditEvents.map((event) => (
+                                            <div key={event.id} className="border-b border-[var(--line)] px-3 py-2.5 last:border-b-0">
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                    <p className="text-sm font-semibold text-[var(--text)]">
+                                                        {event.crisis_detected ? "Crisis safety check" : "AI analysis"}
+                                                    </p>
+                                                    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-semibold uppercase leading-3 tracking-wide ${event.data_left_device ? "bg-[rgba(245,225,221,0.68)] text-[#8a5f42]" : "bg-[rgba(238,244,238,0.82)] text-[var(--accent-strong)]"}`}>
+                                                        {event.data_left_device ? "Data left device" : "Stayed local"}
+                                                    </span>
                                                 </div>
-                                            </button>
+                                                <p className="mt-1 text-xs leading-5 text-[var(--muted-strong)]">
+                                                    {new Date(event.created_at).toLocaleString()} / {event.entry_id > 0 ? `Entry #${event.entry_id}` : "Unsaved entry"}
+                                                </p>
+                                                <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+                                                    Mode: {event.mode} / Model: {event.model_name}
+                                                    {event.emotion_model ? ` / Emotion: ${event.emotion_model}` : ""}
+                                                </p>
+                                            </div>
                                         ))}
                                     </div>
-                                </div>
-
-                                {emotionModel !== "default" && (
-                                    <div>
-                                        {renderModelInstallPanel(emotionModel, "Selected emotion model")}
-                                    </div>
                                 )}
-
-                                <div className="app-panel-muted rounded-[28px] p-5">
-                                    <div className="flex items-start gap-3">
-                                        <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                                            <KeyRound size={18} />
-                                        </span>
-                                        <div className="flex-1">
-                                            <p className="eyebrow">Password</p>
-                                            <h3 className="mt-2 text-lg font-semibold text-[var(--text)]">Vault access</h3>
-
-                                            <div className="mt-4 flex flex-col gap-3">
-                                                <input
-                                                    type="password"
-                                                    value={currentPassword}
-                                                    onChange={(e) => setCurrentPassword(e.target.value)}
-                                                    placeholder="Current password"
-                                                    className="soft-input"
-                                                    autoComplete="current-password"
-                                                />
-                                                <input
-                                                    type="password"
-                                                    value={newPassword}
-                                                    onChange={(e) => setNewPassword(e.target.value)}
-                                                    placeholder="New password"
-                                                    className="soft-input"
-                                                    autoComplete="new-password"
-                                                />
-                                                <input
-                                                    type="password"
-                                                    value={confirmNewPassword}
-                                                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                                                    placeholder="Confirm new password"
-                                                    className="soft-input"
-                                                    autoComplete="new-password"
-                                                />
-                                            </div>
-
-                                            {passwordFeedback && (
-                                                <div className="mt-4 rounded-[20px] border border-[var(--line)] bg-[rgba(255,255,255,0.72)] p-4 text-sm leading-7 text-[var(--muted-strong)]">
-                                                    {passwordFeedback}
-                                                </div>
-                                            )}
-
-                                            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleChangePassword}
-                                                    disabled={changingPassword || !currentPassword || !newPassword || !confirmNewPassword}
-                                                    className="action-primary justify-center disabled:cursor-not-allowed disabled:opacity-55"
-                                                >
-                                                    {changingPassword ? (
-                                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#f8f7f2] border-t-transparent" />
-                                                    ) : (
-                                                        <KeyRound size={16} />
-                                                    )}
-                                                    {changingPassword ? "Changing..." : "Change password"}
-                                                </button>
-
-                                                <button
-                                                    type="button"
-                                                    onClick={handleLockVault}
-                                                    disabled={lockingVault}
-                                                    className="action-secondary justify-center disabled:cursor-not-allowed disabled:opacity-55"
-                                                >
-                                                    {lockingVault ? (
-                                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
-                                                    ) : (
-                                                        <Lock size={16} />
-                                                    )}
-                                                    {lockingVault ? "Locking..." : "Lock now"}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="app-panel-muted rounded-[28px] p-5">
-                                    <div className="flex items-start gap-3">
-                                        <span className="icon-badge h-11 w-11 rounded-[1rem]">
-                                            <Shield size={18} />
-                                        </span>
-                                        <div>
-                                            <p className="eyebrow">PRIVACY</p>
-                                            <div className="mt-3 space-y-2 text-sm leading-7 text-[var(--muted-strong)]">
-                                                <p className="flex items-center gap-2">
-                                                    <Check size={14} className="text-[var(--accent-strong)]" />
-                                                    AES-256-GCM
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <Check size={14} className="text-[var(--accent-strong)]" />
-                                                    No telemetry
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <FolderOpen size={14} className="text-[var(--accent-strong)]" />
-                                                    ~/Library/Application Support/Sanctum/
-                                                </p>
-                                            </div>
-
-                                            <div className="mt-6 border-t border-[var(--line)] pt-5">
-                                                <p className="eyebrow">Privacy Ledger</p>
-                                                {auditEvents.length === 0 ? (
-                                                    <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">
-                                                        No AI analysis events have been recorded yet.
-                                                    </p>
-                                                ) : (
-                                                    <div className="mt-4 flex flex-col gap-3">
-                                                        {auditEvents.map((event) => (
-                                                            <div
-                                                                key={event.id}
-                                                                className="rounded-[20px] border border-[var(--line)] bg-[rgba(255,255,255,0.62)] p-4"
-                                                            >
-                                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                                    <p className="text-sm font-semibold text-[var(--text)]">
-                                                                        {event.crisis_detected ? "Crisis safety check" : "AI analysis"}
-                                                                    </p>
-                                                                    <span className={`pill-chip ${event.data_left_device ? "bg-[rgba(245,225,221,0.82)] text-[#8a5f42]" : "bg-[rgba(238,244,238,0.92)] text-[var(--accent-strong)]"}`}>
-                                                                        {event.data_left_device ? "Data left device" : "Stayed local"}
-                                                                    </span>
-                                                                </div>
-                                                                <p className="mt-2 text-xs leading-6 text-[var(--muted-strong)]">
-                                                                    {new Date(event.created_at).toLocaleString()} / {event.entry_id > 0 ? `Entry #${event.entry_id}` : "Unsaved entry"}
-                                                                </p>
-                                                                <p className="mt-1 text-xs leading-6 text-[var(--muted)]">
-                                                                    Mode: {event.mode} / Model: {event.model_name}
-                                                                    {event.emotion_model ? ` / Emotion: ${event.emotion_model}` : ""}
-                                                                </p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
-                        </div>
-                    </section>
+                        </section>
+                    </aside>
                 </div>
-
-            </div>
+            </section>
         </div>
     );
 }

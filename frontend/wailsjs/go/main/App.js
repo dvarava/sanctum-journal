@@ -50,6 +50,10 @@ export function GetEntries() {
   return window['go']['main']['App']['GetEntries']();
 }
 
+export function GetSanctumDirectory() {
+  return window['go']['main']['App']['GetSanctumDirectory']();
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }

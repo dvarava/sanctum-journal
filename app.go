@@ -798,6 +798,20 @@ func (a *App) GetSettings() Settings {
 	return s
 }
 
+func (a *App) GetSanctumDirectory() string {
+	if strings.TrimSpace(a.sanctumDir) != "" {
+		return filepath.Clean(a.sanctumDir)
+	}
+	if strings.TrimSpace(a.dbPath) != "" {
+		return filepath.Clean(filepath.Dir(a.dbPath))
+	}
+	appDataDir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Clean(filepath.Join(appDataDir, "Sanctum"))
+}
+
 func (a *App) SaveSettings(style, depth, model, emotionModel, username, crisisRegion string, onboardingComplete bool) string {
 	if a.db == nil {
 		return "Database not initialized"
