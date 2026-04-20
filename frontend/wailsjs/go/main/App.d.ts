@@ -22,6 +22,8 @@ export function FindSimilarEntries(arg1:string,arg2:number,arg3:number):Promise<
 
 export function GenerateEmbedding(arg1:string):Promise<Array<number>>;
 
+export function GetAnalysisAudit(arg1:number):Promise<Array<main.AnalysisAuditEvent>>;
+
 export function GetEntries():Promise<Array<main.Entry>>;
 
 export function GetSettings():Promise<main.Settings>;
@@ -40,7 +42,7 @@ export function ResetVault(arg1:string,arg2:string):Promise<main.AuthResult>;
 
 export function SaveEntry(arg1:number,arg2:string,arg3:string,arg4:Array<string>,arg5:string):Promise<string>;
 
-export function SaveSettings(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean):Promise<string>;
+export function SaveSettings(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:boolean):Promise<string>;
 
 export function SetupVaultPassword(arg1:string,arg2:string):Promise<main.AuthResult>;
 

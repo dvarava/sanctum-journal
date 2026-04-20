@@ -71,6 +71,9 @@ function App() {
 
   // user display name
   const [displayName, setDisplayName] = useState("");
+  const [modelName, setModelName] = useState("qwen3:4b");
+  const [emotionModel, setEmotionModel] = useState("default");
+  const [crisisRegion, setCrisisRegion] = useState("global");
   const [vaultStatus, setVaultStatus] = useState<main.VaultStatus | null>(null);
 
   // load history + settings on mount and when navigating views
@@ -92,6 +95,9 @@ function App() {
     try {
       const s = await GetSettings();
       setDisplayName(s.user_name || "");
+      setModelName(s.model_name || "qwen3:4b");
+      setEmotionModel(s.emotion_model || "default");
+      setCrisisRegion(s.crisis_region || "global");
       if (s.onboarding_complete === false) {
         setIsOnboarding(true);
       }
@@ -284,6 +290,9 @@ function App() {
     setIsSaving(false);
     setHistory([]);
     setDisplayName("");
+    setModelName("qwen3:4b");
+    setEmotionModel("default");
+    setCrisisRegion("global");
     setAnalysisPrompt(null);
     setIsOnboarding(false);
     setIsCrisisActive(false);
@@ -466,6 +475,7 @@ function App() {
       {isCrisisActive && (
         <CrisisScreen
           severity={crisisSeverity}
+          region={crisisRegion}
           onDismiss={handleCrisisDismiss}
         />
       )}
@@ -487,6 +497,8 @@ function App() {
               loading={isAnalyzing}
               status={aiStatus}
               useCloud={useCloud}
+              modelName={modelName}
+              emotionModel={emotionModel}
             />
           ) : undefined
         }

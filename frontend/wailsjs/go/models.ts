@@ -1,5 +1,33 @@
 export namespace main {
 	
+	export class AnalysisAuditEvent {
+	    id: number;
+	    created_at: string;
+	    entry_id: number;
+	    mode: string;
+	    model_name: string;
+	    emotion_model: string;
+	    data_left_device: boolean;
+	    crisis_detected: boolean;
+	    purpose: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AnalysisAuditEvent(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.created_at = source["created_at"];
+	        this.entry_id = source["entry_id"];
+	        this.mode = source["mode"];
+	        this.model_name = source["model_name"];
+	        this.emotion_model = source["emotion_model"];
+	        this.data_left_device = source["data_left_device"];
+	        this.crisis_detected = source["crisis_detected"];
+	        this.purpose = source["purpose"];
+	    }
+	}
 	export class Entry {
 	    id: number;
 	    title: string;
@@ -145,6 +173,7 @@ export namespace main {
 	    model_name: string;
 	    emotion_model: string;
 	    user_name: string;
+	    crisis_region: string;
 	    onboarding_complete: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -158,6 +187,7 @@ export namespace main {
 	        this.model_name = source["model_name"];
 	        this.emotion_model = source["emotion_model"];
 	        this.user_name = source["user_name"];
+	        this.crisis_region = source["crisis_region"];
 	        this.onboarding_complete = source["onboarding_complete"];
 	    }
 	}

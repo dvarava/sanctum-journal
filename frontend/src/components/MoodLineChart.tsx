@@ -50,7 +50,7 @@ export function MoodLineChart({ entries }: MoodLineChartProps) {
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <p className="eyebrow">Trend</p>
-                    <h3 className="section-title mt-2 text-[1.65rem]">Emotional tone</h3>
+                    <h3 className="section-title mt-2 text-[1.65rem]">Estimated emotional tone</h3>
                 </div>
                 <div className="pill-chip">
                     <span className="text-sm font-semibold text-[var(--accent-strong)]">{moodLabel}</span>
@@ -97,7 +97,7 @@ export function MoodLineChart({ entries }: MoodLineChartProps) {
                                         boxShadow: "0 16px 30px rgba(63,78,66,0.12)",
                                     }}
                                     itemStyle={{ color: "#425347" }}
-                                    formatter={(value) => [typeof value === "number" ? value.toFixed(1) : "0.0", "Mood score"]}
+                                    formatter={(value) => [typeof value === "number" ? value.toFixed(1) : "0.0", "Estimated tone"]}
                                 />
                                 <Line
                                     type="monotone"

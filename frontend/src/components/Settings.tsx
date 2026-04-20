@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Settings as SettingsIcon, Brain, Gauge, Cpu, User, Shield, Check, FolderOpen, Download, AlertTriangle, KeyRound, Lock } from 'lucide-react';
-import { CancelPullModel, ChangeVaultPassword, GetSettings, IsOllamaRunning, ListModels, LockVault, PullModel, SaveSettings } from '../../wailsjs/go/main/App';
+import { CancelPullModel, ChangeVaultPassword, GetAnalysisAudit, GetSettings, IsOllamaRunning, ListModels, LockVault, PullModel, SaveSettings } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
+import { main } from '../../wailsjs/go/models';
 
 interface SettingsProps {
     onLock?: () => void;
@@ -46,6 +47,12 @@ const availableModels = [
 const emoModels = [
     { id: 'default', label: 'Use Base Model', description: 'Single model' },
     { id: 'guanxin/emollm:latest', label: 'EmoLLM 7B', description: 'Emotion-specific' },
+];
+
+const crisisRegions = [
+    { id: 'global', label: 'Global', description: 'International directory' },
+    { id: 'us', label: 'United States', description: '988 and text support' },
+    { id: 'uk_ie', label: 'UK / Ireland', description: 'Samaritans and global directory' },
 ];
 
 type PullProgressEvent = {
@@ -117,6 +124,8 @@ export function Settings({ onLock }: SettingsProps) {
     const [modelName, setModelName] = useState('gemma:2b');
     const [emotionModel, setEmotionModel] = useState('default');
     const [userName, setUserName] = useState('');
+    const [crisisRegion, setCrisisRegion] = useState('global');
+    const [auditEvents, setAuditEvents] = useState<main.AnalysisAuditEvent[]>([]);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(true);
     const [ollamaRunning, setOllamaRunning] = useState<boolean | null>(null);
@@ -178,6 +187,8 @@ export function Settings({ onLock }: SettingsProps) {
                 setModelName(canonicalModelName(s.model_name || 'gemma:2b'));
                 setEmotionModel(canonicalModelName(s.emotion_model || 'default'));
                 setUserName(s.user_name || '');
+                setCrisisRegion(s.crisis_region || 'global');
+                setAuditEvents((await GetAnalysisAudit(8)) || []);
             } catch { }
             await refreshModelStatus();
             setLoading(false);
@@ -206,8 +217,9 @@ export function Settings({ onLock }: SettingsProps) {
     }, [installingModel]);
 
     const handleSave = async () => {
-        await SaveSettings(coachingStyle, analysisDepth, modelName, emotionModel, userName, true);
+        await SaveSettings(coachingStyle, analysisDepth, modelName, emotionModel, userName, crisisRegion, true);
         setSaved(true);
+        setAuditEvents((await GetAnalysisAudit(8)) || []);
         setTimeout(() => setSaved(false), 2000);
     };
 
@@ -565,6 +577,48 @@ export function Settings({ onLock }: SettingsProps) {
                     </section>
 
                     <section className="app-panel rounded-[30px] p-6 xl:col-span-2">
+                        <div className="flex items-center gap-3">
+                            <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                                <AlertTriangle size={18} />
+                            </span>
+                            <div>
+                                <p className="eyebrow">Safety</p>
+                                <h3 className="text-xl font-semibold text-[var(--text)]">Crisis resources</h3>
+                            </div>
+                        </div>
+
+                        <div className="mt-5 grid gap-3 md:grid-cols-3">
+                            {crisisRegions.map((region) => (
+                                <button
+                                    key={region.id}
+                                    onClick={() => setCrisisRegion(region.id)}
+                                    className={`rounded-[24px] border p-4 text-left transition-all ${
+                                        crisisRegion === region.id
+                                            ? "border-[rgba(177,95,78,0.28)] bg-[rgba(245,225,221,0.82)] shadow-[0_16px_30px_rgba(144,86,72,0.08)]"
+                                            : "border-[var(--line)] bg-[rgba(255,255,255,0.62)] hover:bg-[rgba(255,255,255,0.84)]"
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <p className="text-sm font-semibold text-[var(--text)]">{region.label}</p>
+                                            <p className="mt-2 text-xs leading-6 text-[var(--muted)]">
+                                                {region.description}
+                                            </p>
+                                        </div>
+                                        {crisisRegion === region.id && (
+                                            <Check size={16} className="mt-0.5 shrink-0 text-[#8a5f42]" />
+                                        )}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+
+                        <p className="mt-4 text-xs leading-6 text-[var(--muted-strong)]">
+                            Crisis checks stay on this device. The selected region only changes which support contacts are shown.
+                        </p>
+                    </section>
+
+                    <section className="app-panel rounded-[30px] p-6 xl:col-span-2">
                         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
                             <div>
                                 <div className="flex items-center gap-3">
@@ -760,6 +814,40 @@ export function Settings({ onLock }: SettingsProps) {
                                                     <FolderOpen size={14} className="text-[var(--accent-strong)]" />
                                                     ~/Library/Application Support/Sanctum/
                                                 </p>
+                                            </div>
+
+                                            <div className="mt-6 border-t border-[var(--line)] pt-5">
+                                                <p className="eyebrow">Privacy Ledger</p>
+                                                {auditEvents.length === 0 ? (
+                                                    <p className="mt-3 text-sm leading-7 text-[var(--muted-strong)]">
+                                                        No AI analysis events have been recorded yet.
+                                                    </p>
+                                                ) : (
+                                                    <div className="mt-4 flex flex-col gap-3">
+                                                        {auditEvents.map((event) => (
+                                                            <div
+                                                                key={event.id}
+                                                                className="rounded-[20px] border border-[var(--line)] bg-[rgba(255,255,255,0.62)] p-4"
+                                                            >
+                                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                    <p className="text-sm font-semibold text-[var(--text)]">
+                                                                        {event.crisis_detected ? "Crisis safety check" : "AI analysis"}
+                                                                    </p>
+                                                                    <span className={`pill-chip ${event.data_left_device ? "bg-[rgba(245,225,221,0.82)] text-[#8a5f42]" : "bg-[rgba(238,244,238,0.92)] text-[var(--accent-strong)]"}`}>
+                                                                        {event.data_left_device ? "Data left device" : "Stayed local"}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="mt-2 text-xs leading-6 text-[var(--muted-strong)]">
+                                                                    {new Date(event.created_at).toLocaleString()} / {event.entry_id > 0 ? `Entry #${event.entry_id}` : "Unsaved entry"}
+                                                                </p>
+                                                                <p className="mt-1 text-xs leading-6 text-[var(--muted)]">
+                                                                    Mode: {event.mode} / Model: {event.model_name}
+                                                                    {event.emotion_model ? ` / Emotion: ${event.emotion_model}` : ""}
+                                                                </p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

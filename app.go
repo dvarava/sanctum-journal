@@ -71,6 +71,7 @@ type Settings struct {
 	ModelName          string `json:"model_name"`     // ollama model to use
 	EmotionModel       string `json:"emotion_model"`  // ollama model to use for emotion analysis
 	UserName           string `json:"user_name"`      // for personalised greeting
+	CrisisRegion       string `json:"crisis_region"`  // global, us, uk_ie
 	OnboardingComplete bool   `json:"onboarding_complete"`
 }
 
@@ -83,6 +84,18 @@ type AuthResult struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message"`
 	Status  VaultStatus `json:"status"`
+}
+
+type AnalysisAuditEvent struct {
+	ID             int    `json:"id"`
+	CreatedAt      string `json:"created_at"`
+	EntryID        int    `json:"entry_id"`
+	Mode           string `json:"mode"`
+	ModelName      string `json:"model_name"`
+	EmotionModel   string `json:"emotion_model"`
+	DataLeftDevice bool   `json:"data_left_device"`
+	CrisisDetected bool   `json:"crisis_detected"`
+	Purpose        string `json:"purpose"`
 }
 
 type encryptedEntryPayload struct {
@@ -110,6 +123,7 @@ type sqlExecutor interface {
 
 const (
 	defaultEmotionModel = "default"
+	defaultCrisisRegion = "global"
 
 	vaultKDF               = "argon2id"
 	vaultPasswordMinLength = 10
@@ -149,6 +163,30 @@ func canonicalEmotionModelName(modelName string) string {
 		return defaultEmotionModel
 	}
 	return modelName
+}
+
+func normalizeCrisisRegion(region string) string {
+	switch strings.ToLower(strings.TrimSpace(region)) {
+	case "us", "usa", "united_states", "united-states":
+		return "us"
+	case "uk_ie", "uk-ie", "uk/ie", "uk", "ie", "ireland":
+		return "uk_ie"
+	case "global", "":
+		return defaultCrisisRegion
+	default:
+		return defaultCrisisRegion
+	}
+}
+
+func defaultSettings() Settings {
+	return Settings{
+		CoachingStyle:      "compassionate",
+		AnalysisDepth:      "brief",
+		ModelName:          "qwen3:4b",
+		EmotionModel:       defaultEmotionModel,
+		CrisisRegion:       defaultCrisisRegion,
+		OnboardingComplete: false,
+	}
 }
 
 func friendlyPullModelError(requestedModel, actualModel, errMessage string) string {
@@ -281,6 +319,7 @@ func (a *App) ensureDatabaseSchema() error {
 		model_name TEXT DEFAULT 'qwen3:4b',
 		emotion_model TEXT DEFAULT 'default',
 		user_name TEXT DEFAULT '',
+		crisis_region TEXT DEFAULT 'global',
 		onboarding_complete BOOLEAN DEFAULT 0
 	);`)
 	if err != nil {
@@ -293,6 +332,7 @@ func (a *App) ensureDatabaseSchema() error {
 	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN user_name TEXT DEFAULT '';")
 	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0;")
 	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN emotion_model TEXT DEFAULT 'default';")
+	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN crisis_region TEXT DEFAULT 'global';")
 
 	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS vault (
 		id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -308,6 +348,21 @@ func (a *App) ensureDatabaseSchema() error {
 	);`)
 	if err != nil {
 		return fmt.Errorf("creating vault table: %w", err)
+	}
+
+	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS analysis_audit (
+		id INTEGER PRIMARY KEY,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		entry_id INTEGER NOT NULL DEFAULT 0,
+		mode TEXT NOT NULL,
+		model_name TEXT NOT NULL,
+		emotion_model TEXT DEFAULT '',
+		data_left_device BOOLEAN NOT NULL DEFAULT 0,
+		crisis_detected BOOLEAN NOT NULL DEFAULT 0,
+		purpose TEXT NOT NULL DEFAULT 'journal_analysis'
+	);`)
+	if err != nil {
+		return fmt.Errorf("creating analysis audit table: %w", err)
 	}
 
 	return nil
@@ -728,38 +783,101 @@ func (a *App) ChangeVaultPassword(currentPassword, newPassword, confirm string) 
 func (a *App) GetSettings() Settings {
 	var s Settings
 	if a.db == nil {
-		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", EmotionModel: defaultEmotionModel, OnboardingComplete: false}
+		return defaultSettings()
 	}
 
-	err := a.db.QueryRow("SELECT coaching_style, analysis_depth, model_name, emotion_model, user_name, onboarding_complete FROM settings WHERE id = 1").
-		Scan(&s.CoachingStyle, &s.AnalysisDepth, &s.ModelName, &s.EmotionModel, &s.UserName, &s.OnboardingComplete)
+	err := a.db.QueryRow("SELECT coaching_style, analysis_depth, model_name, emotion_model, user_name, crisis_region, onboarding_complete FROM settings WHERE id = 1").
+		Scan(&s.CoachingStyle, &s.AnalysisDepth, &s.ModelName, &s.EmotionModel, &s.UserName, &s.CrisisRegion, &s.OnboardingComplete)
 	if err != nil {
 		// return defaults if row doesn't exist yet
-		return Settings{CoachingStyle: "compassionate", AnalysisDepth: "brief", ModelName: "qwen3:4b", EmotionModel: defaultEmotionModel, OnboardingComplete: false}
+		return defaultSettings()
 	}
 	s.ModelName = canonicalOllamaModelName(s.ModelName)
 	s.EmotionModel = canonicalEmotionModelName(s.EmotionModel)
+	s.CrisisRegion = normalizeCrisisRegion(s.CrisisRegion)
 	return s
 }
 
-func (a *App) SaveSettings(style, depth, model, emotionModel, username string, onboardingComplete bool) string {
+func (a *App) SaveSettings(style, depth, model, emotionModel, username, crisisRegion string, onboardingComplete bool) string {
 	if a.db == nil {
 		return "Database not initialized"
 	}
 
 	model = canonicalOllamaModelName(model)
 	emotionModel = canonicalEmotionModelName(emotionModel)
+	crisisRegion = normalizeCrisisRegion(crisisRegion)
 
 	_, err := a.db.Exec(`
 		UPDATE settings 
-		SET coaching_style = ?, analysis_depth = ?, model_name = ?, emotion_model = ?, user_name = ?, onboarding_complete = ?
+		SET coaching_style = ?, analysis_depth = ?, model_name = ?, emotion_model = ?, user_name = ?, crisis_region = ?, onboarding_complete = ?
 		WHERE id = 1
-	`, style, depth, model, emotionModel, username, onboardingComplete)
+	`, style, depth, model, emotionModel, username, crisisRegion, onboardingComplete)
 
 	if err != nil {
 		return "Error saving settings: " + err.Error()
 	}
 	return "Settings saved securely."
+}
+
+func (a *App) recordAnalysisAudit(event AnalysisAuditEvent) error {
+	if a.db == nil {
+		return errors.New("database not initialized")
+	}
+	if strings.TrimSpace(event.Mode) == "" {
+		event.Mode = "local"
+	}
+	if strings.TrimSpace(event.ModelName) == "" {
+		event.ModelName = "unknown"
+	}
+	if strings.TrimSpace(event.Purpose) == "" {
+		event.Purpose = "journal_analysis"
+	}
+
+	_, err := a.db.Exec(`
+		INSERT INTO analysis_audit (entry_id, mode, model_name, emotion_model, data_left_device, crisis_detected, purpose)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, event.EntryID, event.Mode, event.ModelName, event.EmotionModel, event.DataLeftDevice, event.CrisisDetected, event.Purpose)
+	return err
+}
+
+func (a *App) GetAnalysisAudit(limit int) []AnalysisAuditEvent {
+	if !a.isVaultUnlocked() || a.db == nil {
+		return []AnalysisAuditEvent{}
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	rows, err := a.db.Query(`
+		SELECT id, created_at, entry_id, mode, model_name, emotion_model, data_left_device, crisis_detected, purpose
+		FROM analysis_audit
+		ORDER BY id DESC
+		LIMIT ?
+	`, limit)
+	if err != nil {
+		return []AnalysisAuditEvent{}
+	}
+	defer rows.Close()
+
+	var events []AnalysisAuditEvent
+	for rows.Next() {
+		var event AnalysisAuditEvent
+		if err := rows.Scan(
+			&event.ID,
+			&event.CreatedAt,
+			&event.EntryID,
+			&event.Mode,
+			&event.ModelName,
+			&event.EmotionModel,
+			&event.DataLeftDevice,
+			&event.CrisisDetected,
+			&event.Purpose,
+		); err != nil {
+			continue
+		}
+		events = append(events, event)
+	}
+	return events
 }
 
 // encryption helpers
@@ -1014,21 +1132,66 @@ func (a *App) AnalyzeJournalForEntry(entryText string, currentEntryId int) Analy
 	return a.analyzeJournal(entryText, currentEntryId)
 }
 
+func buildJournalAnalysisPrompt(entryText, styleDirective, ragContext, depthDirective string) string {
+	return fmt.Sprintf(`You are a CBT-informed journaling coach. Analyze this journal entry and respond with JSON.
+
+ENTRY: "%s"
+
+COACHING STYLE: %s%s
+
+RULES:
+1. Detect the PRIMARY emotional tone of the entry — what the person is FEELING NOW, not words they merely mention.
+2. If the entry is POSITIVE (celebrating, grateful, proud), reinforce the behaviour. Do NOT reframe positive entries.
+3. If the entry is NEGATIVE (distorted thinking, rumination, self-criticism), provide a gentle cognitive reframe.
+4. If MIXED, acknowledge the positive and gently address the negative.
+5. You are NOT a therapist. Never diagnose. Never prescribe. If they mention professional help, encourage it.
+
+RESPOND WITH JSON:
+- "emotions": Array of 1-3 emotions the person is currently feeling (NOT keywords they mention).
+- "coaching": %s
+
+EXAMPLES:
+
+Entry: "I was walking today for 3 hours and I feel amazing. I need to walk more, especially when anxious."
+{"emotions": ["Proud", "Energised"], "coaching": "Walking is a powerful coping tool — you've found something that genuinely works for you."}
+
+Entry: "I failed the exam. I'm so stupid. I'll never get this right."
+{"emotions": ["Frustrated", "Self-Critical"], "coaching": "One exam doesn't define your ability — what would you say to a friend in this situation?"}
+
+Entry: "Had a good day at work but I keep thinking about what my colleague said. Maybe they're right about me."
+{"emotions": ["Anxious", "Reflective"], "coaching": "A good day happened — that's real. One comment doesn't erase it. What evidence contradicts their words?"}
+
+JSON Response:`, entryText, styleDirective, ragContext, depthDirective)
+}
+
 // function to send text to local Ollama instance and return structured data
 func (a *App) analyzeJournal(entryText string, currentEntryId int) AnalysisResult {
 	url := "http://localhost:11434/api/generate"
 
+	// load user settings to personalise the coaching style
+	settings := a.GetSettings()
+	primaryModel := canonicalOllamaModelName(settings.ModelName)
+	emotionModel := canonicalEmotionModelName(settings.EmotionModel)
+	isDualModel := emotionModel != defaultEmotionModel
+
 	// check for crisis markers before invoking LLM
 	crisis := a.CheckCrisisMarkers(entryText)
 	if crisis.IsCrisis {
+		if err := a.recordAnalysisAudit(AnalysisAuditEvent{
+			EntryID:        currentEntryId,
+			Mode:           "local",
+			ModelName:      "crisis-safety-check",
+			DataLeftDevice: false,
+			CrisisDetected: true,
+			Purpose:        "crisis_safety_check",
+		}); err != nil {
+			log.Printf("Could not record crisis audit event: %v", err)
+		}
 		return AnalysisResult{
 			Emotions: []string{"Crisis Detected"},
 			Coaching: "AI coaching is paused for your safety. Please see the crisis resources displayed.",
 		}
 	}
-
-	// load user settings to personalise the coaching style
-	settings := a.GetSettings()
 
 	// map coaching style to system prompt personality
 	styleDirective := map[string]string{
@@ -1059,42 +1222,24 @@ func (a *App) analyzeJournal(entryText string, currentEntryId int) AnalysisResul
 		ragContext += "\nIf relevant, gently weave in a connection to how they handled things in the past."
 	}
 
-	// system prompt with injected style, few-shot examples, and RAG context
-	// if using a specialized EmoLLM, optionally override the 'emotions' field later
-	primaryModel := canonicalOllamaModelName(settings.ModelName)
-	emotionModel := canonicalEmotionModelName(settings.EmotionModel)
-	isDualModel := emotionModel != defaultEmotionModel
+	auditEmotionModel := ""
+	if isDualModel {
+		auditEmotionModel = emotionModel
+	}
+	if err := a.recordAnalysisAudit(AnalysisAuditEvent{
+		EntryID:        currentEntryId,
+		Mode:           "local",
+		ModelName:      primaryModel,
+		EmotionModel:   auditEmotionModel,
+		DataLeftDevice: false,
+		CrisisDetected: false,
+		Purpose:        "journal_analysis",
+	}); err != nil {
+		log.Printf("Could not record analysis audit event: %v", err)
+	}
 
 	// base coaching prompt
-	prompt := fmt.Sprintf(`You are a CBT-informed journaling coach. Analyze this journal entry and respond with JSON.
-
-ENTRY: "%s"
-
-COACHING STYLE: %s%s
-
-RULES:
-1. Detect the PRIMARY emotional tone of the entry — what the person is FEELING NOW, not words they merely mention.
-2. If the entry is POSITIVE (celebrating, grateful, proud), reinforce the behaviour. Do NOT reframe positive entries.
-3. If the entry is NEGATIVE (distorted thinking, rumination, self-criticism), provide a gentle cognitive reframe.
-4. If MIXED, acknowledge the positive and gently address the negative.
-5. You are NOT a therapist. Never diagnose. Never prescribe. If they mention professional help, encourage it.
-
-RESPOND WITH JSON:
-- "emotions": Array of 1-3 emotions the person is currently feeling (NOT keywords they mention).
-- "coaching": %s
-
-EXAMPLES:
-
-Entry: "I was walking today for 3 hours and I feel amazing. I need to walk more, especially when anxious."
-{"emotions": ["Proud", "Energised"], "coaching": "Walking is a powerful coping tool — you've found something that genuinely works for you."}
-
-Entry: "I failed the exam. I'm so stupid. I'll never get this right."
-{"emotions": ["Frustrated", "Self-Critical"], "coaching": "One exam doesn't define your ability — what would you say to a friend in this situation?"}
-
-Entry: "Had a good day at work but I keep thinking about what my colleague said. Maybe they're right about me."
-{"emotions": ["Anxious", "Reflective"], "coaching": "A good day happened — that's real. One comment doesn't erase it. What evidence contradicts their words?"}
-
-JSON Response:`, entryText, styleDirective, ragContext, depthDirective)
+	prompt := buildJournalAnalysisPrompt(entryText, styleDirective, ragContext, depthDirective)
 
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"model":  primaryModel,
@@ -1221,6 +1366,16 @@ RESPOND STRICTLY IN THIS FORMAT:
 func (a *App) AnalyzeJournalCloud(entryText string, apiKey string) AnalysisResult {
 	if !a.isVaultUnlocked() {
 		return AnalysisResult{Coaching: "Unlock Sanctum before analyzing entries."}
+	}
+
+	if err := a.recordAnalysisAudit(AnalysisAuditEvent{
+		Mode:           "cloud-mock",
+		ModelName:      "mock-openai",
+		DataLeftDevice: false,
+		CrisisDetected: false,
+		Purpose:        "journal_analysis",
+	}); err != nil {
+		log.Printf("Could not record cloud audit event: %v", err)
 	}
 
 	return AnalysisResult{

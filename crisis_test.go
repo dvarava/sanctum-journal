@@ -177,3 +177,48 @@ func TestCrisisDetection_DoesNotBlockNormalMedical(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyzeJournalCrisisStopsBeforeLocalLLM(t *testing.T) {
+	app := newTestVaultApp(t)
+	if result := app.SetupVaultPassword("crisis guard password", "crisis guard password"); !result.Success {
+		t.Fatalf("SetupVaultPassword() = %+v, want success", result)
+	}
+
+	result := app.AnalyzeJournal("I want to kill myself tonight.")
+	if len(result.Emotions) != 1 || result.Emotions[0] != "Crisis Detected" {
+		t.Fatalf("AnalyzeJournal() emotions = %v, want [Crisis Detected]", result.Emotions)
+	}
+	if !strings.Contains(strings.ToLower(result.Coaching), "paused") {
+		t.Fatalf("AnalyzeJournal() coaching = %q, want paused safety response", result.Coaching)
+	}
+
+	events := app.GetAnalysisAudit(5)
+	if len(events) == 0 {
+		t.Fatal("GetAnalysisAudit() length = 0, want crisis audit event")
+	}
+	if !events[0].CrisisDetected || events[0].ModelName != "crisis-safety-check" || events[0].DataLeftDevice {
+		t.Fatalf("crisis audit event = %+v, want local crisis safety event with no data leaving device", events[0])
+	}
+}
+
+func TestBuildJournalAnalysisPromptKeepsSafetyRules(t *testing.T) {
+	prompt := buildJournalAnalysisPrompt(
+		"I failed an exam.",
+		"Respond with warmth.",
+		"",
+		"One sentence.",
+	)
+
+	required := []string{
+		"You are NOT a therapist",
+		"Never diagnose",
+		"Never prescribe",
+		"professional help",
+		"RESPOND WITH JSON",
+	}
+	for _, phrase := range required {
+		if !strings.Contains(prompt, phrase) {
+			t.Fatalf("prompt missing %q:\n%s", phrase, prompt)
+		}
+	}
+}

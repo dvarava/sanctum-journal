@@ -226,6 +226,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
                 hwInfo?.recommended_model || currentSettings.model_name,
                 currentSettings.emotion_model || "default",
                 currentSettings.user_name,
+                currentSettings.crisis_region || "global",
                 true
             );
         } catch (e) {

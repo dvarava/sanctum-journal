@@ -42,6 +42,10 @@ export function GenerateEmbedding(arg1) {
   return window['go']['main']['App']['GenerateEmbedding'](arg1);
 }
 
+export function GetAnalysisAudit(arg1) {
+  return window['go']['main']['App']['GetAnalysisAudit'](arg1);
+}
+
 export function GetEntries() {
   return window['go']['main']['App']['GetEntries']();
 }
@@ -78,8 +82,8 @@ export function SaveEntry(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['main']['App']['SaveEntry'](arg1, arg2, arg3, arg4, arg5);
 }
 
-export function SaveSettings(arg1, arg2, arg3, arg4, arg5, arg6) {
-  return window['go']['main']['App']['SaveSettings'](arg1, arg2, arg3, arg4, arg5, arg6);
+export function SaveSettings(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['SaveSettings'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function SetupVaultPassword(arg1, arg2) {

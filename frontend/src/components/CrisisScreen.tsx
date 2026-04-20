@@ -3,11 +3,13 @@ import { BrowserOpenURL } from "../../wailsjs/runtime/runtime";
 
 interface CrisisScreenProps {
     severity: string;
+    region: string;
     onDismiss: () => void;
 }
 
 const crisisResources = [
     {
+        regionKey: "us",
         name: "National Suicide Prevention Lifeline",
         number: "988",
         url: "tel:988",
@@ -15,6 +17,7 @@ const crisisResources = [
         region: "US",
     },
     {
+        regionKey: "us",
         name: "Crisis Text Line",
         number: "Text HOME to 741741",
         url: "sms:741741&body=HOME",
@@ -22,6 +25,7 @@ const crisisResources = [
         region: "US",
     },
     {
+        regionKey: "uk_ie",
         name: "Samaritans",
         number: "116 123",
         url: "tel:116123",
@@ -29,6 +33,7 @@ const crisisResources = [
         region: "UK/IE",
     },
     {
+        regionKey: "global",
         name: "International Association for Suicide Prevention",
         number: "https://www.iasp.info/resources/Crisis_Centres/",
         url: "https://www.iasp.info/resources/Crisis_Centres/",
@@ -37,7 +42,19 @@ const crisisResources = [
     },
 ];
 
-export function CrisisScreen({ severity, onDismiss }: CrisisScreenProps) {
+const regionLabels: Record<string, string> = {
+    global: "global",
+    us: "US and global",
+    uk_ie: "UK/IE and global",
+};
+
+export function CrisisScreen({ severity, region, onDismiss }: CrisisScreenProps) {
+    const selectedRegion = region || "global";
+    const visibleResources = crisisResources.filter((resource) => {
+        if (selectedRegion === "global") return resource.regionKey === "global";
+        return resource.regionKey === selectedRegion || resource.regionKey === "global";
+    });
+
     return (
         <div className="fixed inset-0 z-50 bg-[rgba(35,49,39,0.5)] backdrop-blur-xl">
             <div className="app-panel-strong h-full w-full overflow-y-auto rounded-none px-4 py-5 sm:px-6 sm:py-6">
@@ -68,11 +85,14 @@ export function CrisisScreen({ severity, onDismiss }: CrisisScreenProps) {
                                     Alert level: {severity}
                                 </div>
                             )}
+                            <p className="text-xs leading-5 text-[var(--muted)]">
+                                Showing {regionLabels[selectedRegion] || regionLabels.global} crisis resources.
+                            </p>
                         </div>
                     </div>
 
                     <div className="grid gap-3 lg:grid-cols-2">
-                        {crisisResources.map((resource, i) => (
+                        {visibleResources.map((resource, i) => (
                             <div
                                 key={i}
                                 onClick={() => BrowserOpenURL(resource.url)}
