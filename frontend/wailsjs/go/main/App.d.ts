@@ -10,6 +10,8 @@ export function AnalyzeJournalForEntry(arg1:string,arg2:number):Promise<main.Ana
 
 export function CancelPullModel(arg1:string):Promise<boolean>;
 
+export function ChangeVaultPassword(arg1:string,arg2:string,arg3:string):Promise<main.AuthResult>;
+
 export function CheckCrisisMarkers(arg1:string):Promise<main.CrisisResult>;
 
 export function DeleteEntry(arg1:number):Promise<string>;
@@ -24,12 +26,22 @@ export function GetEntries():Promise<Array<main.Entry>>;
 
 export function GetSettings():Promise<main.Settings>;
 
+export function GetVaultStatus():Promise<main.VaultStatus>;
+
 export function IsOllamaRunning():Promise<boolean>;
 
 export function ListModels():Promise<Array<string>>;
 
+export function LockVault():Promise<main.AuthResult>;
+
 export function PullModel(arg1:string):Promise<void>;
+
+export function ResetVault(arg1:string,arg2:string):Promise<main.AuthResult>;
 
 export function SaveEntry(arg1:number,arg2:string,arg3:string,arg4:Array<string>,arg5:string):Promise<string>;
 
 export function SaveSettings(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:boolean):Promise<string>;
+
+export function SetupVaultPassword(arg1:string,arg2:string):Promise<main.AuthResult>;
+
+export function UnlockVault(arg1:string):Promise<main.AuthResult>;

@@ -18,6 +18,10 @@ export function CancelPullModel(arg1) {
   return window['go']['main']['App']['CancelPullModel'](arg1);
 }
 
+export function ChangeVaultPassword(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ChangeVaultPassword'](arg1, arg2, arg3);
+}
+
 export function CheckCrisisMarkers(arg1) {
   return window['go']['main']['App']['CheckCrisisMarkers'](arg1);
 }
@@ -46,6 +50,10 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
+export function GetVaultStatus() {
+  return window['go']['main']['App']['GetVaultStatus']();
+}
+
 export function IsOllamaRunning() {
   return window['go']['main']['App']['IsOllamaRunning']();
 }
@@ -54,8 +62,16 @@ export function ListModels() {
   return window['go']['main']['App']['ListModels']();
 }
 
+export function LockVault() {
+  return window['go']['main']['App']['LockVault']();
+}
+
 export function PullModel(arg1) {
   return window['go']['main']['App']['PullModel'](arg1);
+}
+
+export function ResetVault(arg1, arg2) {
+  return window['go']['main']['App']['ResetVault'](arg1, arg2);
 }
 
 export function SaveEntry(arg1, arg2, arg3, arg4, arg5) {
@@ -64,4 +80,12 @@ export function SaveEntry(arg1, arg2, arg3, arg4, arg5) {
 
 export function SaveSettings(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['main']['App']['SaveSettings'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function SetupVaultPassword(arg1, arg2) {
+  return window['go']['main']['App']['SetupVaultPassword'](arg1, arg2);
+}
+
+export function UnlockVault(arg1) {
+  return window['go']['main']['App']['UnlockVault'](arg1);
 }

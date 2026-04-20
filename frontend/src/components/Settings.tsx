@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Settings as SettingsIcon, Brain, Gauge, Cpu, User, Shield, Check, FolderOpen, Download, AlertTriangle } from 'lucide-react';
-import { CancelPullModel, GetSettings, IsOllamaRunning, ListModels, PullModel, SaveSettings } from '../../wailsjs/go/main/App';
+import { Settings as SettingsIcon, Brain, Gauge, Cpu, User, Shield, Check, FolderOpen, Download, AlertTriangle, KeyRound, Lock } from 'lucide-react';
+import { CancelPullModel, ChangeVaultPassword, GetSettings, IsOllamaRunning, ListModels, LockVault, PullModel, SaveSettings } from '../../wailsjs/go/main/App';
 import { EventsOn } from '../../wailsjs/runtime/runtime';
+
+interface SettingsProps {
+    onLock?: () => void;
+}
 
 const coachingStyles = [
     {
@@ -107,7 +111,7 @@ const modelPillClass = "pill-chip min-w-[7.5rem] justify-center";
 const compactModelButtonClass = `${modelPillClass} bg-[rgba(255,255,255,0.72)] text-[var(--accent-strong)] transition-all hover:bg-[rgba(255,255,255,0.9)] disabled:cursor-not-allowed disabled:opacity-55`;
 const installModelButtonClass = `${modelPillClass} border-[rgba(65,82,71,0.2)] bg-[#415247] !text-[#f8f7f2] !shadow-none transition-all hover:bg-[#536b59] disabled:cursor-not-allowed disabled:opacity-100 [&_svg]:!text-[#f8f7f2]`;
 
-export function Settings() {
+export function Settings({ onLock }: SettingsProps) {
     const [coachingStyle, setCoachingStyle] = useState('compassionate');
     const [analysisDepth, setAnalysisDepth] = useState('brief');
     const [modelName, setModelName] = useState('gemma:2b');
@@ -124,6 +128,12 @@ export function Settings() {
     const [installStatus, setInstallStatus] = useState("");
     const [installProgress, setInstallProgress] = useState<number | null>(null);
     const [installError, setInstallError] = useState("");
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmNewPassword, setConfirmNewPassword] = useState("");
+    const [passwordFeedback, setPasswordFeedback] = useState("");
+    const [changingPassword, setChangingPassword] = useState(false);
+    const [lockingVault, setLockingVault] = useState(false);
 
     const refreshModelStatus = useCallback(async () => {
         setCheckingModels(true);
@@ -199,6 +209,50 @@ export function Settings() {
         await SaveSettings(coachingStyle, analysisDepth, modelName, emotionModel, userName, true);
         setSaved(true);
         setTimeout(() => setSaved(false), 2000);
+    };
+
+    const handleChangePassword = async () => {
+        setPasswordFeedback("");
+        if (newPassword !== confirmNewPassword) {
+            setPasswordFeedback("New passwords do not match.");
+            return;
+        }
+        if (newPassword.length < 10) {
+            setPasswordFeedback("New password must be at least 10 characters.");
+            return;
+        }
+
+        setChangingPassword(true);
+        try {
+            const result = await ChangeVaultPassword(currentPassword, newPassword, confirmNewPassword);
+            setPasswordFeedback(result.message || "");
+            if (result.success) {
+                setCurrentPassword("");
+                setNewPassword("");
+                setConfirmNewPassword("");
+            }
+        } catch (e) {
+            setPasswordFeedback(getErrorMessage(e));
+        } finally {
+            setChangingPassword(false);
+        }
+    };
+
+    const handleLockVault = async () => {
+        setPasswordFeedback("");
+        setLockingVault(true);
+        try {
+            const result = await LockVault();
+            if (result.success) {
+                onLock?.();
+                return;
+            }
+            setPasswordFeedback(result.message || "Could not lock Sanctum.");
+        } catch (e) {
+            setPasswordFeedback(getErrorMessage(e));
+        } finally {
+            setLockingVault(false);
+        }
     };
 
     const handleInstallModel = async (targetModel: string) => {
@@ -610,6 +664,81 @@ export function Settings() {
                                         {renderModelInstallPanel(emotionModel, "Selected emotion model")}
                                     </div>
                                 )}
+
+                                <div className="app-panel-muted rounded-[28px] p-5">
+                                    <div className="flex items-start gap-3">
+                                        <span className="icon-badge h-11 w-11 rounded-[1rem]">
+                                            <KeyRound size={18} />
+                                        </span>
+                                        <div className="flex-1">
+                                            <p className="eyebrow">Password</p>
+                                            <h3 className="mt-2 text-lg font-semibold text-[var(--text)]">Vault access</h3>
+
+                                            <div className="mt-4 flex flex-col gap-3">
+                                                <input
+                                                    type="password"
+                                                    value={currentPassword}
+                                                    onChange={(e) => setCurrentPassword(e.target.value)}
+                                                    placeholder="Current password"
+                                                    className="soft-input"
+                                                    autoComplete="current-password"
+                                                />
+                                                <input
+                                                    type="password"
+                                                    value={newPassword}
+                                                    onChange={(e) => setNewPassword(e.target.value)}
+                                                    placeholder="New password"
+                                                    className="soft-input"
+                                                    autoComplete="new-password"
+                                                />
+                                                <input
+                                                    type="password"
+                                                    value={confirmNewPassword}
+                                                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                                    placeholder="Confirm new password"
+                                                    className="soft-input"
+                                                    autoComplete="new-password"
+                                                />
+                                            </div>
+
+                                            {passwordFeedback && (
+                                                <div className="mt-4 rounded-[20px] border border-[var(--line)] bg-[rgba(255,255,255,0.72)] p-4 text-sm leading-7 text-[var(--muted-strong)]">
+                                                    {passwordFeedback}
+                                                </div>
+                                            )}
+
+                                            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleChangePassword}
+                                                    disabled={changingPassword || !currentPassword || !newPassword || !confirmNewPassword}
+                                                    className="action-primary justify-center disabled:cursor-not-allowed disabled:opacity-55"
+                                                >
+                                                    {changingPassword ? (
+                                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#f8f7f2] border-t-transparent" />
+                                                    ) : (
+                                                        <KeyRound size={16} />
+                                                    )}
+                                                    {changingPassword ? "Changing..." : "Change password"}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={handleLockVault}
+                                                    disabled={lockingVault}
+                                                    className="action-secondary justify-center disabled:cursor-not-allowed disabled:opacity-55"
+                                                >
+                                                    {lockingVault ? (
+                                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+                                                    ) : (
+                                                        <Lock size={16} />
+                                                    )}
+                                                    {lockingVault ? "Locking..." : "Lock now"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <div className="app-panel-muted rounded-[28px] p-5">
                                     <div className="flex items-start gap-3">

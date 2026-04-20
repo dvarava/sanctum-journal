@@ -6,8 +6,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,22 +29,23 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/crypto/argon2"
 )
 
 type App struct {
 	ctx         context.Context
 	db          *sql.DB
-	secretKey   []byte // just for prototype, will derive this from a user password using Argon2 in future
+	dbPath      string
+	sanctumDir  string
+	keyMu       sync.RWMutex
+	secretKey   []byte
+	embedText   func(string) []float64
 	pullMu      sync.Mutex
 	pullCancels map[string]context.CancelFunc
 }
 
 func NewApp() *App {
-	// for prototype: Hardcoded 32-byte key (AES-256).
-	// in production, replace with Argon2 key derivation from user password
-	key, _ := hex.DecodeString("6368616e676520746869732070617373776f726420746f206120736563726574")
 	return &App{
-		secretKey:   key,
 		pullCancels: make(map[string]context.CancelFunc),
 	}
 }
@@ -73,7 +74,56 @@ type Settings struct {
 	OnboardingComplete bool   `json:"onboarding_complete"`
 }
 
-const defaultEmotionModel = "default"
+type VaultStatus struct {
+	Configured bool `json:"configured"`
+	Unlocked   bool `json:"unlocked"`
+}
+
+type AuthResult struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Status  VaultStatus `json:"status"`
+}
+
+type encryptedEntryPayload struct {
+	Version   int       `json:"version"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	Emotions  []string  `json:"emotions"`
+	Coaching  string    `json:"coaching"`
+	Embedding []float64 `json:"embedding"`
+}
+
+type vaultRecord struct {
+	KDF        string
+	Salt       []byte
+	TimeCost   uint32
+	MemoryCost uint32
+	Threads    uint8
+	KeyLength  uint32
+	Verifier   []byte
+}
+
+type sqlExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+}
+
+const (
+	defaultEmotionModel = "default"
+
+	vaultKDF               = "argon2id"
+	vaultPasswordMinLength = 10
+	vaultSaltLength        = 32
+	vaultKeyLength         = 32
+	vaultArgonTime         = uint32(3)
+	vaultArgonMemory       = uint32(64 * 1024)
+	vaultArgonThreads      = uint8(4)
+	vaultVerifierPlaintext = "sanctum-vault-verifier-v1"
+
+	entryPayloadVersion = 1
+)
+
+var encryptedBlobMagic = []byte{'S', 'J', '1'}
 
 var ollamaModelAliases = map[string]string{
 	"emollm:7b":     "guanxin/emollm:latest",
@@ -189,8 +239,10 @@ func (a *App) initDB() {
 		fmt.Println("Error creating directory:", err)
 		return
 	}
+	a.sanctumDir = sanctumDir
 
 	dbPath := filepath.Join(sanctumDir, "sanctum_proto.db")
+	a.dbPath = dbPath
 
 	var err error
 	a.db, err = sql.Open("sqlite3", dbPath)
@@ -199,24 +251,27 @@ func (a *App) initDB() {
 		return
 	}
 
-	// create table if not exists
-	sqlStmt := `CREATE TABLE IF NOT EXISTS entries (
-		id INTEGER PRIMARY KEY, 
-		title TEXT DEFAULT '',
-		content BLOB, 
-		emotions TEXT DEFAULT '[]',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);`
-	_, err = a.db.Exec(sqlStmt)
-	if err != nil {
-		fmt.Println("Error creating table:", err)
+	if err := a.ensureDatabaseSchema(); err != nil {
+		fmt.Println("Error initializing database schema:", err)
+		return
 	}
 
-	// for existing DBs
-	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN title TEXT DEFAULT '';")
-	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN emotions TEXT DEFAULT '[]';")
-	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN coaching TEXT DEFAULT '';")
-	_, _ = a.db.Exec("ALTER TABLE entries ADD COLUMN embedding TEXT DEFAULT '[]';")
+	fmt.Println("Database initialized at:", dbPath)
+}
+
+func (a *App) ensureDatabaseSchema() error {
+	if a.db == nil {
+		return errors.New("database not initialized")
+	}
+
+	_, err := a.db.Exec(`CREATE TABLE IF NOT EXISTS entries (
+		id INTEGER PRIMARY KEY,
+		payload BLOB NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("creating entries table: %w", err)
+	}
 
 	// settings table
 	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS settings (
@@ -229,7 +284,7 @@ func (a *App) initDB() {
 		onboarding_complete BOOLEAN DEFAULT 0
 	);`)
 	if err != nil {
-		log.Fatalf("Error creating settings table: %v\n", err)
+		return fmt.Errorf("creating settings table: %w", err)
 	}
 	// ensure defaults row exists
 	_, _ = a.db.Exec(`INSERT OR IGNORE INTO settings (id) VALUES (1);`)
@@ -239,7 +294,434 @@ func (a *App) initDB() {
 	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN onboarding_complete BOOLEAN DEFAULT 0;")
 	_, _ = a.db.Exec("ALTER TABLE settings ADD COLUMN emotion_model TEXT DEFAULT 'default';")
 
-	fmt.Println("Database initialized at:", dbPath)
+	_, err = a.db.Exec(`CREATE TABLE IF NOT EXISTS vault (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		kdf TEXT NOT NULL,
+		salt BLOB NOT NULL,
+		time_cost INTEGER NOT NULL,
+		memory_cost INTEGER NOT NULL,
+		threads INTEGER NOT NULL,
+		key_length INTEGER NOT NULL,
+		verifier BLOB NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`)
+	if err != nil {
+		return fmt.Errorf("creating vault table: %w", err)
+	}
+
+	return nil
+}
+
+func recreateEncryptedEntriesTable(exec sqlExecutor) error {
+	if _, err := exec.Exec("DROP TABLE IF EXISTS entries;"); err != nil {
+		return err
+	}
+	_, err := exec.Exec(`CREATE TABLE entries (
+		id INTEGER PRIMARY KEY,
+		payload BLOB NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`)
+	return err
+}
+
+func randomBytes(length int) ([]byte, error) {
+	buf := make([]byte, length)
+	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func validateNewPassword(password, confirm string) error {
+	if password != confirm {
+		return errors.New("passwords do not match")
+	}
+	if len([]rune(password)) < vaultPasswordMinLength {
+		return fmt.Errorf("password must be at least %d characters", vaultPasswordMinLength)
+	}
+	return nil
+}
+
+func defaultVaultRecord(password string) (vaultRecord, []byte, error) {
+	salt, err := randomBytes(vaultSaltLength)
+	if err != nil {
+		return vaultRecord{}, nil, err
+	}
+
+	record := vaultRecord{
+		KDF:        vaultKDF,
+		Salt:       salt,
+		TimeCost:   vaultArgonTime,
+		MemoryCost: vaultArgonMemory,
+		Threads:    vaultArgonThreads,
+		KeyLength:  vaultKeyLength,
+	}
+	key := deriveVaultKey(password, record)
+	verifier, err := encryptBytesWithKey(key, []byte(vaultVerifierPlaintext))
+	if err != nil {
+		return vaultRecord{}, nil, err
+	}
+	record.Verifier = verifier
+	return record, key, nil
+}
+
+func deriveVaultKey(password string, record vaultRecord) []byte {
+	return argon2.IDKey([]byte(password), record.Salt, record.TimeCost, record.MemoryCost, record.Threads, record.KeyLength)
+}
+
+func (a *App) setSecretKey(key []byte) {
+	a.keyMu.Lock()
+	defer a.keyMu.Unlock()
+
+	for i := range a.secretKey {
+		a.secretKey[i] = 0
+	}
+	a.secretKey = append([]byte(nil), key...)
+}
+
+func (a *App) clearSecretKey() {
+	a.keyMu.Lock()
+	defer a.keyMu.Unlock()
+
+	for i := range a.secretKey {
+		a.secretKey[i] = 0
+	}
+	a.secretKey = nil
+}
+
+func (a *App) currentSecretKey() ([]byte, error) {
+	a.keyMu.RLock()
+	defer a.keyMu.RUnlock()
+
+	if len(a.secretKey) != vaultKeyLength {
+		return nil, errors.New("vault is locked")
+	}
+	return append([]byte(nil), a.secretKey...), nil
+}
+
+func (a *App) isVaultUnlocked() bool {
+	a.keyMu.RLock()
+	defer a.keyMu.RUnlock()
+	return len(a.secretKey) == vaultKeyLength
+}
+
+func (a *App) getVaultRecord() (vaultRecord, bool, error) {
+	if a.db == nil {
+		return vaultRecord{}, false, errors.New("database not initialized")
+	}
+
+	var record vaultRecord
+	var timeCost, memoryCost, threads, keyLength int
+	err := a.db.QueryRow(`
+		SELECT kdf, salt, time_cost, memory_cost, threads, key_length, verifier
+		FROM vault
+		WHERE id = 1
+	`).Scan(&record.KDF, &record.Salt, &timeCost, &memoryCost, &threads, &keyLength, &record.Verifier)
+	if errors.Is(err, sql.ErrNoRows) {
+		return vaultRecord{}, false, nil
+	}
+	if err != nil {
+		return vaultRecord{}, false, err
+	}
+	if record.KDF != vaultKDF {
+		return vaultRecord{}, true, fmt.Errorf("unsupported vault KDF: %s", record.KDF)
+	}
+	if timeCost <= 0 || memoryCost <= 0 || threads <= 0 || keyLength <= 0 {
+		return vaultRecord{}, true, errors.New("vault metadata is invalid")
+	}
+
+	record.TimeCost = uint32(timeCost)
+	record.MemoryCost = uint32(memoryCost)
+	record.Threads = uint8(threads)
+	record.KeyLength = uint32(keyLength)
+	return record, true, nil
+}
+
+func (a *App) vaultStatus() VaultStatus {
+	_, configured, err := a.getVaultRecord()
+	if err != nil {
+		return VaultStatus{Configured: false, Unlocked: false}
+	}
+	return VaultStatus{Configured: configured, Unlocked: configured && a.isVaultUnlocked()}
+}
+
+func (a *App) authResult(success bool, message string) AuthResult {
+	return AuthResult{
+		Success: success,
+		Message: message,
+		Status:  a.vaultStatus(),
+	}
+}
+
+func verifyVaultPassword(password string, record vaultRecord) ([]byte, error) {
+	key := deriveVaultKey(password, record)
+	plaintext, err := decryptBytesWithKey(key, record.Verifier)
+	if err != nil {
+		return nil, errors.New("incorrect password")
+	}
+	if subtle.ConstantTimeCompare(plaintext, []byte(vaultVerifierPlaintext)) != 1 {
+		return nil, errors.New("incorrect password")
+	}
+	return key, nil
+}
+
+func insertVaultRecord(exec sqlExecutor, record vaultRecord) error {
+	_, err := exec.Exec(`
+		INSERT INTO vault (id, kdf, salt, time_cost, memory_cost, threads, key_length, verifier, created_at, updated_at)
+		VALUES (1, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			kdf = excluded.kdf,
+			salt = excluded.salt,
+			time_cost = excluded.time_cost,
+			memory_cost = excluded.memory_cost,
+			threads = excluded.threads,
+			key_length = excluded.key_length,
+			verifier = excluded.verifier,
+			updated_at = CURRENT_TIMESTAMP
+	`, record.KDF, record.Salt, record.TimeCost, record.MemoryCost, record.Threads, record.KeyLength, record.Verifier)
+	return err
+}
+
+func (a *App) backupDatabase(reason string) (string, error) {
+	if a.db == nil || a.dbPath == "" {
+		return "", nil
+	}
+
+	baseDir := a.sanctumDir
+	if baseDir == "" {
+		baseDir = filepath.Dir(a.dbPath)
+	}
+	backupsDir := filepath.Join(baseDir, "backups")
+	if err := os.MkdirAll(backupsDir, 0755); err != nil {
+		return "", err
+	}
+
+	safeReason := strings.NewReplacer(" ", "-", "/", "-", "\\", "-", ":", "-").Replace(strings.ToLower(strings.TrimSpace(reason)))
+	if safeReason == "" {
+		safeReason = "vault"
+	}
+	now := time.Now()
+	backupName := fmt.Sprintf("sanctum-%s-%09d-%s.db", now.Format("20060102-150405"), now.Nanosecond(), safeReason)
+	backupPath := filepath.Join(backupsDir, backupName)
+
+	if _, err := a.db.Exec("VACUUM main INTO ?", backupPath); err == nil {
+		return backupPath, nil
+	}
+
+	return backupPath, copyFile(a.dbPath, backupPath)
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Sync()
+}
+
+func (a *App) GetVaultStatus() VaultStatus {
+	return a.vaultStatus()
+}
+
+func (a *App) SetupVaultPassword(password, confirm string) AuthResult {
+	if a.db == nil {
+		return a.authResult(false, "Database not initialized.")
+	}
+	if err := validateNewPassword(password, confirm); err != nil {
+		return a.authResult(false, err.Error())
+	}
+	if _, configured, err := a.getVaultRecord(); err != nil {
+		return a.authResult(false, "Could not read vault settings: "+err.Error())
+	} else if configured {
+		return a.authResult(false, "Vault is already set up.")
+	}
+
+	if _, err := a.backupDatabase("first-password-setup"); err != nil {
+		return a.authResult(false, "Could not archive the current database: "+err.Error())
+	}
+
+	record, key, err := defaultVaultRecord(password)
+	if err != nil {
+		return a.authResult(false, "Could not create vault key: "+err.Error())
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		return a.authResult(false, "Could not start vault setup: "+err.Error())
+	}
+	defer tx.Rollback()
+
+	if err := recreateEncryptedEntriesTable(tx); err != nil {
+		return a.authResult(false, "Could not reset old journal entries: "+err.Error())
+	}
+	if err := insertVaultRecord(tx, record); err != nil {
+		return a.authResult(false, "Could not save vault settings: "+err.Error())
+	}
+	if err := tx.Commit(); err != nil {
+		return a.authResult(false, "Could not finish vault setup: "+err.Error())
+	}
+
+	a.setSecretKey(key)
+	return a.authResult(true, "Vault is ready.")
+}
+
+func (a *App) UnlockVault(password string) AuthResult {
+	a.clearSecretKey()
+
+	record, configured, err := a.getVaultRecord()
+	if err != nil {
+		return a.authResult(false, "Could not read vault settings: "+err.Error())
+	}
+	if !configured {
+		return a.authResult(false, "Create a password before unlocking Sanctum.")
+	}
+
+	key, err := verifyVaultPassword(password, record)
+	if err != nil {
+		a.clearSecretKey()
+		return a.authResult(false, "Incorrect password.")
+	}
+
+	a.setSecretKey(key)
+	return a.authResult(true, "Vault unlocked.")
+}
+
+func (a *App) LockVault() AuthResult {
+	a.clearSecretKey()
+	return a.authResult(true, "Vault locked.")
+}
+
+func (a *App) ResetVault(password, confirm string) AuthResult {
+	if a.db == nil {
+		return a.authResult(false, "Database not initialized.")
+	}
+	if err := validateNewPassword(password, confirm); err != nil {
+		return a.authResult(false, err.Error())
+	}
+	if _, err := a.backupDatabase("password-reset"); err != nil {
+		return a.authResult(false, "Could not archive the encrypted database: "+err.Error())
+	}
+
+	record, key, err := defaultVaultRecord(password)
+	if err != nil {
+		return a.authResult(false, "Could not create vault key: "+err.Error())
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		return a.authResult(false, "Could not start reset: "+err.Error())
+	}
+	defer tx.Rollback()
+
+	if err := recreateEncryptedEntriesTable(tx); err != nil {
+		return a.authResult(false, "Could not clear journal entries: "+err.Error())
+	}
+	if err := insertVaultRecord(tx, record); err != nil {
+		return a.authResult(false, "Could not save vault settings: "+err.Error())
+	}
+	if err := tx.Commit(); err != nil {
+		return a.authResult(false, "Could not finish reset: "+err.Error())
+	}
+
+	a.setSecretKey(key)
+	return a.authResult(true, "Journal reset and unlocked.")
+}
+
+type entryCiphertextUpdate struct {
+	ID      int
+	Payload []byte
+}
+
+func (a *App) ChangeVaultPassword(currentPassword, newPassword, confirm string) AuthResult {
+	if a.db == nil {
+		return a.authResult(false, "Database not initialized.")
+	}
+	if err := validateNewPassword(newPassword, confirm); err != nil {
+		return a.authResult(false, err.Error())
+	}
+
+	record, configured, err := a.getVaultRecord()
+	if err != nil {
+		return a.authResult(false, "Could not read vault settings: "+err.Error())
+	}
+	if !configured {
+		return a.authResult(false, "Create a password before changing it.")
+	}
+
+	oldKey, err := verifyVaultPassword(currentPassword, record)
+	if err != nil {
+		return a.authResult(false, "Current password is incorrect.")
+	}
+
+	newRecord, newKey, err := defaultVaultRecord(newPassword)
+	if err != nil {
+		return a.authResult(false, "Could not create the new vault key: "+err.Error())
+	}
+
+	rows, err := a.db.Query("SELECT id, payload FROM entries ORDER BY id ASC")
+	if err != nil {
+		return a.authResult(false, "Could not read encrypted entries: "+err.Error())
+	}
+
+	var updates []entryCiphertextUpdate
+	for rows.Next() {
+		var update entryCiphertextUpdate
+		var oldPayload []byte
+		if err := rows.Scan(&update.ID, &oldPayload); err != nil {
+			rows.Close()
+			return a.authResult(false, "Could not read encrypted entry: "+err.Error())
+		}
+		plaintext, err := decryptBytesWithKey(oldKey, oldPayload)
+		if err != nil {
+			rows.Close()
+			return a.authResult(false, "Could not decrypt an entry with the current password.")
+		}
+		update.Payload, err = encryptBytesWithKey(newKey, plaintext)
+		if err != nil {
+			rows.Close()
+			return a.authResult(false, "Could not re-encrypt an entry: "+err.Error())
+		}
+		updates = append(updates, update)
+	}
+	if err := rows.Close(); err != nil {
+		return a.authResult(false, "Could not finish reading encrypted entries: "+err.Error())
+	}
+	if err := rows.Err(); err != nil {
+		return a.authResult(false, "Could not read encrypted entries: "+err.Error())
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		return a.authResult(false, "Could not start password change: "+err.Error())
+	}
+	defer tx.Rollback()
+
+	for _, update := range updates {
+		if _, err := tx.Exec("UPDATE entries SET payload = ? WHERE id = ?", update.Payload, update.ID); err != nil {
+			return a.authResult(false, "Could not save re-encrypted entries: "+err.Error())
+		}
+	}
+	if err := insertVaultRecord(tx, newRecord); err != nil {
+		return a.authResult(false, "Could not save the new vault settings: "+err.Error())
+	}
+	if err := tx.Commit(); err != nil {
+		return a.authResult(false, "Could not finish password change: "+err.Error())
+	}
+
+	a.setSecretKey(newKey)
+	return a.authResult(true, "Password changed.")
 }
 
 // settings methods
@@ -281,8 +763,8 @@ func (a *App) SaveSettings(style, depth, model, emotionModel, username string, o
 }
 
 // encryption helpers
-func (a *App) encrypt(plaintext string) ([]byte, error) {
-	block, err := aes.NewCipher(a.secretKey)
+func encryptBytesWithKey(key, plaintext []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
@@ -294,61 +776,103 @@ func (a *App) encrypt(plaintext string) ([]byte, error) {
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, err
 	}
-	return gcm.Seal(nonce, nonce, []byte(plaintext), nil), nil
+	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
+	result := make([]byte, 0, len(encryptedBlobMagic)+len(nonce)+len(ciphertext))
+	result = append(result, encryptedBlobMagic...)
+	result = append(result, nonce...)
+	result = append(result, ciphertext...)
+	return result, nil
 }
 
-func (a *App) decrypt(ciphertext []byte) (string, error) {
-	block, err := aes.NewCipher(a.secretKey)
+func decryptBytesWithKey(key, encrypted []byte) ([]byte, error) {
+	if !bytes.HasPrefix(encrypted, encryptedBlobMagic) {
+		return nil, fmt.Errorf("unsupported encrypted payload format")
+	}
+
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+
+	encrypted = encrypted[len(encryptedBlobMagic):]
 	nonceSize := gcm.NonceSize()
-	if len(ciphertext) < nonceSize {
-		return "", fmt.Errorf("ciphertext too short")
+	if len(encrypted) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short")
 	}
-	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	nonce, ciphertext := encrypted[:nonceSize], encrypted[nonceSize:]
+	return gcm.Open(nil, nonce, ciphertext, nil)
+}
+
+func (a *App) encryptEntryPayload(payload encryptedEntryPayload) ([]byte, error) {
+	key, err := a.currentSecretKey()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(plaintext), nil
+	payload.Version = entryPayloadVersion
+	plaintext, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	return encryptBytesWithKey(key, plaintext)
+}
+
+func (a *App) decryptEntryPayload(encrypted []byte) (encryptedEntryPayload, error) {
+	key, err := a.currentSecretKey()
+	if err != nil {
+		return encryptedEntryPayload{}, err
+	}
+	plaintext, err := decryptBytesWithKey(key, encrypted)
+	if err != nil {
+		return encryptedEntryPayload{}, err
+	}
+	var payload encryptedEntryPayload
+	if err := json.Unmarshal(plaintext, &payload); err != nil {
+		return encryptedEntryPayload{}, err
+	}
+	if payload.Version != entryPayloadVersion {
+		return encryptedEntryPayload{}, fmt.Errorf("unsupported entry payload version: %d", payload.Version)
+	}
+	payload.Emotions = normalizeEmotions(payload.Emotions)
+	return payload, nil
 }
 
 // exposed methods for frontend
 func (a *App) SaveEntry(id int, title string, text string, emotions []string, coaching string) string {
-	encryptedData, err := a.encrypt(text)
-	if err != nil {
-		return "Error encrypting data: " + err.Error()
+	if _, err := a.currentSecretKey(); err != nil {
+		return "Vault is locked. Unlock Sanctum before saving."
 	}
 
 	if title == "" {
 		title = "Untitled Entry"
 	}
 
-	// emotions to JSON string
+	// normalize labels before they enter the encrypted payload
 	emotions = normalizeEmotions(emotions)
-	emotionsJSON, _ := json.Marshal(emotions)
-	if emotionsJSON == nil {
-		emotionsJSON = []byte("[]")
-	}
 
 	// generated embedding vector for semantic search
-	embeddingVector := a.GenerateEmbedding(text)
-	embeddingJSON, _ := json.Marshal(embeddingVector)
-	if embeddingJSON == nil || len(embeddingVector) == 0 {
-		embeddingJSON = []byte("[]")
+	embeddingVector := a.generateEmbeddingForEntry(text)
+
+	encryptedData, err := a.encryptEntryPayload(encryptedEntryPayload{
+		Title:     title,
+		Content:   text,
+		Emotions:  emotions,
+		Coaching:  coaching,
+		Embedding: embeddingVector,
+	})
+	if err != nil {
+		return "Error encrypting data: " + err.Error()
 	}
 
 	if id == 0 {
 		// new entry
-		_, err = a.db.Exec("INSERT INTO entries (title, content, emotions, coaching, embedding) VALUES (?, ?, ?, ?, ?)", title, encryptedData, string(emotionsJSON), coaching, string(embeddingJSON))
+		_, err = a.db.Exec("INSERT INTO entries (payload) VALUES (?)", encryptedData)
 	} else {
 		// update existing entry
-		_, err = a.db.Exec("UPDATE entries SET title = ?, content = ?, emotions = ?, coaching = ?, embedding = ? WHERE id = ?", title, encryptedData, string(emotionsJSON), coaching, string(embeddingJSON), id)
+		_, err = a.db.Exec("UPDATE entries SET payload = ? WHERE id = ?", encryptedData, id)
 	}
 
 	if err != nil {
@@ -358,6 +882,10 @@ func (a *App) SaveEntry(id int, title string, text string, emotions []string, co
 }
 
 func (a *App) DeleteEntry(id int) string {
+	if _, err := a.currentSecretKey(); err != nil {
+		return "Vault is locked. Unlock Sanctum before deleting entries."
+	}
+
 	_, err := a.db.Exec("DELETE FROM entries WHERE id = ?", id)
 	if err != nil {
 		return "Error deleting entry: " + err.Error()
@@ -366,7 +894,11 @@ func (a *App) DeleteEntry(id int) string {
 }
 
 func (a *App) GetEntries() []Entry {
-	rows, err := a.db.Query("SELECT id, title, content, emotions, coaching, created_at FROM entries ORDER BY id DESC")
+	if _, err := a.currentSecretKey(); err != nil {
+		return []Entry{}
+	}
+
+	rows, err := a.db.Query("SELECT id, payload, created_at FROM entries ORDER BY id DESC")
 	if err != nil {
 		return []Entry{}
 	}
@@ -375,37 +907,34 @@ func (a *App) GetEntries() []Entry {
 	var entries []Entry
 	for rows.Next() {
 		var id int
-		var title string
 		var encryptedBlob []byte
-		var emotionsJSON string
-		var coaching string
 		var createdAt string
 
-		err := rows.Scan(&id, &title, &encryptedBlob, &emotionsJSON, &coaching, &createdAt)
+		err := rows.Scan(&id, &encryptedBlob, &createdAt)
 		if err != nil {
 			fmt.Println("Scan error:", err)
 			continue
 		}
 
-		decrypted, _ := a.decrypt(encryptedBlob)
+		payload, err := a.decryptEntryPayload(encryptedBlob)
+		if err != nil {
+			fmt.Println("Decrypt error:", err)
+			continue
+		}
 
 		// short preview
-		preview := decrypted
+		preview := payload.Content
 		if len(preview) > 100 {
 			preview = preview[:100] + "..."
 		}
 
-		var emotions []string
-		_ = json.Unmarshal([]byte(emotionsJSON), &emotions)
-		emotions = normalizeEmotions(emotions)
-
 		entries = append(entries, Entry{
 			ID:        id,
-			Title:     title,
-			Content:   decrypted,
+			Title:     payload.Title,
+			Content:   payload.Content,
 			Preview:   preview,
-			Emotions:  emotions,
-			Coaching:  coaching,
+			Emotions:  payload.Emotions,
+			Coaching:  payload.Coaching,
 			CreatedAt: createdAt,
 		})
 	}
@@ -471,11 +1000,17 @@ func (a *App) CheckCrisisMarkers(text string) CrisisResult {
 }
 
 func (a *App) AnalyzeJournal(entryText string) AnalysisResult {
+	if !a.isVaultUnlocked() {
+		return AnalysisResult{Coaching: "Unlock Sanctum before analyzing entries."}
+	}
 	return a.analyzeJournal(entryText, 0)
 }
 
 // analyzes an existing entry while excluding it from RAG context.
 func (a *App) AnalyzeJournalForEntry(entryText string, currentEntryId int) AnalysisResult {
+	if !a.isVaultUnlocked() {
+		return AnalysisResult{Coaching: "Unlock Sanctum before analyzing entries."}
+	}
 	return a.analyzeJournal(entryText, currentEntryId)
 }
 
@@ -684,6 +1219,9 @@ RESPOND STRICTLY IN THIS FORMAT:
 
 // mock implementation of OpenAI API
 func (a *App) AnalyzeJournalCloud(entryText string, apiKey string) AnalysisResult {
+	if !a.isVaultUnlocked() {
+		return AnalysisResult{Coaching: "Unlock Sanctum before analyzing entries."}
+	}
 
 	return AnalysisResult{
 		Emotions: []string{"Cloud-Analyzed", "Insightful"},
@@ -895,6 +1433,13 @@ func (a *App) PullModel(modelName string) error {
 }
 
 // Local RAG & Vector Search
+func (a *App) generateEmbeddingForEntry(text string) []float64 {
+	if a.embedText != nil {
+		return a.embedText(text)
+	}
+	return a.GenerateEmbedding(text)
+}
+
 func (a *App) GenerateEmbedding(text string) []float64 {
 	// uses nomic-embed-text for fast, high quality local embeddings
 	requestBody, _ := json.Marshal(map[string]interface{}{
@@ -953,12 +1498,16 @@ type scoredEntry struct {
 }
 
 func (a *App) FindSimilarEntries(queryText string, currentEntryId int, limit int) []Entry {
-	queryVec := a.GenerateEmbedding(queryText)
+	if _, err := a.currentSecretKey(); err != nil {
+		return []Entry{}
+	}
+
+	queryVec := a.generateEmbeddingForEntry(queryText)
 	if len(queryVec) == 0 {
 		return []Entry{}
 	}
 
-	rows, err := a.db.Query("SELECT id, title, content, emotions, coaching, created_at, embedding FROM entries")
+	rows, err := a.db.Query("SELECT id, payload, created_at FROM entries")
 	if err != nil {
 		return []Entry{}
 	}
@@ -968,10 +1517,10 @@ func (a *App) FindSimilarEntries(queryText string, currentEntryId int, limit int
 
 	for rows.Next() {
 		var id int
-		var title, emotionsJSON, coaching, createdAt, embeddingStr string
+		var createdAt string
 		var encryptedBlob []byte
 
-		if err := rows.Scan(&id, &title, &encryptedBlob, &emotionsJSON, &coaching, &createdAt, &embeddingStr); err != nil {
+		if err := rows.Scan(&id, &encryptedBlob, &createdAt); err != nil {
 			continue
 		}
 
@@ -980,42 +1529,33 @@ func (a *App) FindSimilarEntries(queryText string, currentEntryId int, limit int
 			continue
 		}
 
-		var entryVec []float64
-		if err := json.Unmarshal([]byte(embeddingStr), &entryVec); err != nil || len(entryVec) == 0 {
+		payload, err := a.decryptEntryPayload(encryptedBlob)
+		if err != nil || len(payload.Embedding) == 0 {
 			continue
 		}
 
-		score := cosineSimilarity(queryVec, entryVec)
+		score := cosineSimilarity(queryVec, payload.Embedding)
 
 		// arbitrary threshold for "similar"
 		if score > 0.6 {
-			decrypted, err := a.decrypt(encryptedBlob)
-			if err != nil {
+			if strings.TrimSpace(payload.Content) == strings.TrimSpace(queryText) {
 				continue
 			}
 
-			if strings.TrimSpace(decrypted) == strings.TrimSpace(queryText) {
-				continue
-			}
-
-			preview := decrypted
+			preview := payload.Content
 			if len(preview) > 150 {
 				preview = preview[:150] + "..."
 			}
-
-			var emotions []string
-			_ = json.Unmarshal([]byte(emotionsJSON), &emotions)
-			emotions = normalizeEmotions(emotions)
 
 			scoredEntries = append(scoredEntries, scoredEntry{
 				score: score,
 				entry: Entry{
 					ID:        id,
-					Title:     title,
-					Content:   decrypted,
+					Title:     payload.Title,
+					Content:   payload.Content,
 					Preview:   preview,
-					Emotions:  emotions,
-					Coaching:  coaching,
+					Emotions:  payload.Emotions,
+					Coaching:  payload.Coaching,
 					CreatedAt: createdAt,
 				},
 			})

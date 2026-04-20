@@ -12,6 +12,7 @@ import { CrisisScreen } from "./components/CrisisScreen";
 import { Settings } from "./components/Settings";
 import { Onboarding } from "./components/Onboarding";
 import { AnalyzePromptToast } from "./components/AnalyzePromptToast";
+import { VaultGate } from "./components/VaultGate";
 
 interface AnalysisResult {
   emotions: string[];
@@ -70,12 +71,14 @@ function App() {
 
   // user display name
   const [displayName, setDisplayName] = useState("");
+  const [vaultStatus, setVaultStatus] = useState<main.VaultStatus | null>(null);
 
   // load history + settings on mount and when navigating views
   useEffect(() => {
+    if (!vaultStatus?.unlocked) return;
     refreshHistory();
     loadDisplayNameAndOnboarding();
-  }, [activeView]);
+  }, [activeView, vaultStatus?.unlocked]);
 
   useEffect(() => {
     journalTextRef.current = journalText;
@@ -135,6 +138,10 @@ function App() {
   };
 
   const refreshHistory = async () => {
+    if (!vaultStatus?.unlocked) {
+      setHistory([]);
+      return [];
+    }
     const entries = await GetEntries();
     const nextHistory = entries || [];
     setHistory(nextHistory);
@@ -142,6 +149,7 @@ function App() {
   };
 
   const handleSave = async () => {
+    if (!vaultStatus?.unlocked) return;
     if (!journalText) return;
     setIsSaving(true);
     const savedEntryId = currentEntryId;
@@ -183,6 +191,7 @@ function App() {
   };
 
   const runAnalysis = async (textToAnalyze: string, entryId: number) => {
+    if (!vaultStatus?.unlocked) return;
     if (!textToAnalyze || isCrisisActive) return;
     setIsAnalyzing(true);
 
@@ -241,6 +250,7 @@ function App() {
   };
 
   const handleDelete = async () => {
+    if (!vaultStatus?.unlocked) return;
     if (currentEntryId === 0) return;
 
     // need to add a confirmation modal here
@@ -259,6 +269,39 @@ function App() {
     currentEntryIdRef.current = 0;
     setIsSaving(false);
     setActiveView("write");
+  };
+
+  const clearSensitiveState = () => {
+    setCurrentEntryId(0);
+    currentEntryIdRef.current = 0;
+    setEntryTitle("");
+    setJournalText("");
+    journalTextRef.current = "";
+    setAiResponse(null);
+    setAnalyzedText("");
+    setIsAnalyzing(false);
+    setAiStatus("");
+    setIsSaving(false);
+    setHistory([]);
+    setDisplayName("");
+    setAnalysisPrompt(null);
+    setIsOnboarding(false);
+    setIsCrisisActive(false);
+    setCrisisSeverity("");
+    if (crisisTimerRef.current) {
+      clearTimeout(crisisTimerRef.current);
+      crisisTimerRef.current = null;
+    }
+  };
+
+  const handleVaultUnlocked = (status: main.VaultStatus) => {
+    setVaultStatus(status);
+    setActiveView("home");
+  };
+
+  const handleVaultLocked = () => {
+    clearSensitiveState();
+    setVaultStatus({ configured: true, unlocked: false } as main.VaultStatus);
   };
 
   const handleSelectEntry = (entry: main.Entry) => {
@@ -407,11 +450,15 @@ function App() {
           </div>
         );
       case "settings":
-        return <Settings />;
+        return <Settings onLock={handleVaultLocked} />;
       default:
         return <div className="p-10 text-center text-gray-500">Work in Progress</div>;
     }
   };
+
+  if (!vaultStatus?.unlocked) {
+    return <VaultGate initialStatus={vaultStatus} onUnlocked={handleVaultUnlocked} />;
+  }
 
   return (
     <>
