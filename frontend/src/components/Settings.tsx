@@ -147,7 +147,6 @@ export function Settings({ onLock }: SettingsProps) {
     const [storageLocation, setStorageLocation] = useState('');
     const [auditEvents, setAuditEvents] = useState<main.AnalysisAuditEvent[]>([]);
     const [saved, setSaved] = useState(false);
-    const [loading, setLoading] = useState(true);
     const [ollamaRunning, setOllamaRunning] = useState<boolean | null>(null);
     const [installedModels, setInstalledModels] = useState<string[]>([]);
     const [checkingModels, setCheckingModels] = useState(false);
@@ -211,7 +210,6 @@ export function Settings({ onLock }: SettingsProps) {
                 setAuditEvents((await GetAnalysisAudit(8)) || []);
             } catch { }
             await refreshModelStatus();
-            setLoading(false);
         })();
     }, [refreshModelStatus]);
 
@@ -446,16 +444,6 @@ export function Settings({ onLock }: SettingsProps) {
             </div>
         );
     };
-
-    if (loading) {
-        return (
-            <div className="page-shell">
-                <div className="app-panel-strong flex min-h-[220px] items-center justify-center rounded-[32px]">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
-                </div>
-            </div>
-        );
-    }
 
     const selectedPrimaryModel = availableModels.find((model) => model.id === modelName);
     const selectedEmotionModel = emoModels.find((model) => model.id === emotionModel);
