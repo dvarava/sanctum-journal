@@ -29,7 +29,7 @@ export function AIPanel({ analysis, loading, status, useCloud, modelName, emotio
                         <Brain size={18} />
                     </span>
                     <div>
-                        <h2 className="text-xl font-semibold text-[var(--text)] sm:text-2xl">AI Coach</h2>
+                        <h2 className="text-xl font-semibold text-[var(--text)] sm:text-2xl">AI Reflection</h2>
                     </div>
                 </div>
 
