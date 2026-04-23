@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
-import { AlertTriangle, ArrowRight, Lock, ShieldCheck } from "lucide-react";
+import { ArrowRight, Lock } from "lucide-react";
 import { GetVaultStatus, ResetVault, SetupVaultPassword, UnlockVault } from "../../wailsjs/go/main/App";
 import { main } from "../../wailsjs/go/models";
+import logoTransparent from "../assets/images/logo-transparent.png";
 
 interface VaultGateProps {
     initialStatus: main.VaultStatus | null;
@@ -129,7 +130,7 @@ export function VaultGate({ initialStatus, onUnlocked }: VaultGateProps) {
                 <section className="app-panel-strong w-full max-w-xl rounded-[32px] p-6 sm:p-8">
                     <div className="flex flex-col items-center text-center">
                         <span className="icon-badge h-16 w-16 rounded-[1.4rem]">
-                            {isReset ? <AlertTriangle size={28} /> : <ShieldCheck size={28} />}
+                            <img src={logoTransparent} alt="" className="brand-logo-image" />
                         </span>
                         <p className="eyebrow mt-6">{eyebrow}</p>
                         <h1 className="page-title mt-3">{title}</h1>

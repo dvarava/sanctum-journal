@@ -411,6 +411,13 @@ textarea {
         box-shadow: 0 10px 30px rgba(93, 117, 99, 0.08);
     }
 
+    .brand-logo-image {
+        width: 74%;
+        height: 74%;
+        object-fit: contain;
+        flex: 0 0 auto;
+    }
+
     .pill-chip {
         display: inline-flex;
         align-items: center;

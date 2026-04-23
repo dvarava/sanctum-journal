@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
-import { Home, PenTool, History as HistoryIcon, Settings, ShieldCheck } from "lucide-react";
+import { Home, PenTool, History as HistoryIcon, Settings } from "lucide-react";
+import logoTransparent from "../assets/images/logo-transparent.png";
 
 interface LayoutProps {
     children: ReactNode;
@@ -48,20 +49,7 @@ export function Layout({ children, activeView, onNavigate, rightPanel }: LayoutP
                         <div className="app-nav-top">
                             <div className="app-brand">
                                 <div className="icon-badge app-brand-mark">
-                                    <svg
-                                        width="24"
-                                        height="24"
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth="1.8"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    >
-                                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                                        <path d="M8 11h8" />
-                                        <path d="M12 15V7" />
-                                    </svg>
+                                    <img src={logoTransparent} alt="" className="brand-logo-image" />
                                 </div>
                                 <div className="app-brand-copy">
                                     <h1>Sanctum Journal</h1>
