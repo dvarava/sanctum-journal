@@ -210,7 +210,7 @@ function App() {
     try {
       let result;
       if (useCloud) {
-        // in production, app will prompt for an API key
+        // in production, app will prompt for an API key (decided to not implement Cloud mode)
         result = await AnalyzeJournalCloud(textToAnalyze, "mock-api-key");
       } else {
         result = await AnalyzeJournalForEntry(textToAnalyze, entryId);
@@ -259,7 +259,7 @@ function App() {
     if (!vaultStatus?.unlocked) return;
     if (currentEntryId === 0) return;
 
-    // need to add a confirmation modal here
+    // !!! need to add a confirmation modal here !!!
     await DeleteEntry(currentEntryId);
     await refreshHistory();
 
